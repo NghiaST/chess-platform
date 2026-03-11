@@ -12,11 +12,11 @@ let io: SocketIOServer;
 export function initSocket(httpServer: HttpServer): SocketIOServer {
   io = new SocketIOServer(httpServer, {
     cors: {
-      origin: process.env.FRONTEND_URL ?? 'http://localhost:5173',
+      origin: (process.env.FRONTEND_URL ?? 'http://localhost:5173')
+        .split(',').map((o) => o.trim()),
       methods: ['GET', 'POST'],
       credentials: true,
     },
-    // Path for Socket.IO requests
     path: '/socket.io',
   });
 
