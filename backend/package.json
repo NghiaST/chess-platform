@@ -7,12 +7,16 @@
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
+    "postinstall": "prisma generate",
     "lint": "eslint src --ext .ts",
     "test": "jest",
     "test:watch": "jest --watch",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   },
   "dependencies": {
     "@prisma/client": "^5.10.0",
