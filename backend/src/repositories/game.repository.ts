@@ -1,3 +1,4 @@
+import { GameStatus, GameResult } from '@prisma/client';
 import prisma from '../config/database';
 
 interface CreateGameDto {
@@ -5,7 +6,7 @@ interface CreateGameDto {
   blackPlayerId: string | null;
   isBotGame: boolean;
   botLevel: number | null;
-  status: string;
+  status: GameStatus;
   fen: string;
 }
 
@@ -20,8 +21,8 @@ interface AddMoveDto {
 interface UpdateGameDto {
   gameId: string;
   fen: string;
-  status: string;
-  result: string | null;
+  status: GameStatus;
+  result: GameResult | null;
 }
 
 export class GameRepository {

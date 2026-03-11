@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   # ── PostgreSQL Database ──────────────────────────────────────────────────────
   postgres:
@@ -11,7 +9,7 @@ services:
       POSTGRES_PASSWORD: chess_password
       POSTGRES_DB: chess_db
     ports:
-      - '5432:5432'
+      - '5433:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -33,6 +31,7 @@ services:
       NODE_ENV: production
       PORT: 4000
       DATABASE_URL: postgresql://chess_user:chess_password@postgres:5432/chess_db
+      # Internal docker network uses 5432 (container port)
       JWT_SECRET: ${JWT_SECRET:-change_this_in_production}
       JWT_EXPIRES_IN: 7d
       FRONTEND_URL: http://localhost:5173

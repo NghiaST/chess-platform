@@ -1,4 +1,5 @@
 import { Chess } from 'chess.js';
+import { GameStatus, GameResult } from '@prisma/client';
 import { GameRepository } from '../repositories/game.repository';
 import { UserRepository } from '../repositories/user.repository';
 import { AppError } from '../middlewares/errorHandler';
@@ -34,10 +35,10 @@ export class GameService {
 
     const game = await gameRepo.create({
       whitePlayerId: userId,
-      blackPlayerId: isBotGame ? null : null, // Will be set when opponent joins
+      blackPlayerId: isBotGame ? null : null,
       isBotGame,
       botLevel: isBotGame ? botLevel : null,
-      status: 'ACTIVE',
+      status: GameStatus.ACTIVE,
       fen: chess.fen(),
     });
 
@@ -53,7 +54,7 @@ export class GameService {
   async makeMove({ gameId, userId, from, to, promotion }: MakeMoveDto) {
     const game = await gameRepo.findById(gameId);
     if (!game) throw new AppError('Game not found.', 404);
-    if (game.status !== 'ACTIVE') throw new AppError('Game is not active.', 400);
+    if (game.status !== GameStatus.ACTIVE) throw new AppError('Game is not active.', 400);
 
     // Validate the player's turn
     const chess = new Chess(game.fen);
@@ -84,18 +85,15 @@ export class GameService {
     const newFen = chess.fen();
 
     // Determine game status
-    let newStatus: string = 'ACTIVE';
-    let result: string | null = null;
+    let newStatus: GameStatus = GameStatus.ACTIVE;
+    let result: GameResult | null = null;
 
     if (chess.isCheckmate()) {
-      newStatus = 'FINISHED';
-      result = turn === 'w' ? 'WHITE_WIN' : 'BLACK_WIN';
-    } else if (chess.isDraw()) {
-      newStatus = 'FINISHED';
-      result = 'DRAW';
-    } else if (chess.isStalemate()) {
-      newStatus = 'FINISHED';
-      result = 'DRAW';
+      newStatus = GameStatus.FINISHED;
+      result = turn === 'w' ? GameResult.WHITE_WIN : GameResult.BLACK_WIN;
+    } else if (chess.isDraw() || chess.isStalemate()) {
+      newStatus = GameStatus.FINISHED;
+      result = GameResult.DRAW;
     }
 
     // Persist move and updated game state
@@ -121,23 +119,23 @@ export class GameService {
         uci: `${from}${to}${promotion ?? ''}`,
         fen: newFen,
       },
-      isGameOver: newStatus === 'FINISHED',
-      result,
+      isGameOver: newStatus === GameStatus.FINISHED,
+      result: result ? String(result) : null,
     };
   }
 
   async resign({ gameId, userId }: ResignDto) {
     const game = await gameRepo.findById(gameId);
     if (!game) throw new AppError('Game not found.', 404);
-    if (game.status !== 'ACTIVE') throw new AppError('Game is not active.', 400);
+    if (game.status !== GameStatus.ACTIVE) throw new AppError('Game is not active.', 400);
 
     const isWhite = game.whitePlayerId === userId;
-    const result = isWhite ? 'BLACK_WIN' : 'WHITE_WIN';
+    const result = isWhite ? GameResult.BLACK_WIN : GameResult.WHITE_WIN;
 
     return gameRepo.updateFenAndStatus({
       gameId,
       fen: game.fen,
-      status: 'FINISHED',
+      status: GameStatus.FINISHED,
       result,
     });
   }
