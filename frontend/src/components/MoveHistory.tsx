@@ -2,6 +2,7 @@ interface Move {
   san: string;
   uci: string;
   color: string;
+  moveNumber?: number;
 }
 
 interface MoveHistoryProps {
@@ -12,11 +13,14 @@ export default function MoveHistory({ moves }: MoveHistoryProps) {
   // Group moves in pairs: [white, black]
   const movePairs: { white?: Move; black?: Move; pair: number }[] = [];
 
-  for (let i = 0; i < moves.length; i += 2) {
+  // Sort moves by moveNumber to ensure correct ordering
+  const sortedMoves = [...moves].sort((a, b) => (a.moveNumber ?? 0) - (b.moveNumber ?? 0));
+
+  for (let i = 0; i < sortedMoves.length; i += 2) {
     movePairs.push({
       pair: Math.floor(i / 2) + 1,
-      white: moves[i],
-      black: moves[i + 1],
+      white: sortedMoves[i],
+      black: sortedMoves[i + 1],
     });
   }
 
