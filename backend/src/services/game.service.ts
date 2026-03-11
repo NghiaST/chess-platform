@@ -264,16 +264,27 @@ export class GameService {
     if (!game) throw new AppError('Game not found.', 404);
     if (game.status !== GameStatus.ACTIVE) throw new AppError('Game is not active.', 400);
     if (!game.isBotGame) throw new AppError('Undo is only available in bot games.', 400);
-    if ((game as any).mode !== 'practice') throw new AppError('Undo is only available in practice mode.', 400);
+    const mode = (game as any).mode || 'standard';
+    if (mode !== 'practice' && mode !== 'study') throw new AppError('Undo is only available in practice or study mode.', 400);
     if (game.whitePlayerId !== userId) throw new AppError('Only the player can undo moves.', 403);
     if (game.moves.length === 0) throw new AppError('No moves to undo.', 400);
 
-    // Delete the last move
-    await gameRepo.deleteLastMove(gameId);
+    // Determine how many moves to delete:
+    // - Practice mode (PvE): delete 2 moves (player's move + bot's response)
+    // - Study mode: delete 1 move
+    const movesToDelete = mode === 'practice' ? 2 : 1;
+
+    if (game.moves.length < movesToDelete) {
+      throw new AppError(`Cannot undo: need at least ${movesToDelete} move(s).`, 400);
+    }
+
+    // Delete the moves
+    await gameRepo.deleteLastMoves(gameId, movesToDelete);
 
     // Replay remaining moves to get the correct FEN
     const chess = new Chess();
-    for (const move of game.moves.slice(0, -1)) {
+    const remainingMoves = game.moves.slice(0, -movesToDelete);
+    for (const move of remainingMoves) {
       chess.move({
         from: move.uci.slice(0, 2),
         to: move.uci.slice(2, 4),
