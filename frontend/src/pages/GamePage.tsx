@@ -33,7 +33,7 @@ export default function GamePage() {
   }, [isAuthenticated, navigate]);
 
   // Load game data
-  const { data: game, isLoading, isError } = useQuery({
+  const { data: game, isLoading, isError, refetch: refetchGame } = useQuery({
     queryKey: ['game', id],
     queryFn: () => gameService.getGame(id!),
     enabled: !!id && isAuthenticated,
@@ -52,7 +52,9 @@ export default function GamePage() {
       
       // Load moves from API response into Zustand store
       if (game.moves && game.moves.length > 0) {
-        const reconstructedMoves = game.moves.map((move: any) => ({
+        const reconstructedMoves = [...game.moves]
+          .sort((a: any, b: any) => (a.moveNumber ?? Number.MAX_SAFE_INTEGER) - (b.moveNumber ?? Number.MAX_SAFE_INTEGER))
+          .map((move: any) => ({
           san: move.san,
           uci: move.uci,
           color: move.color,
@@ -87,16 +89,21 @@ export default function GamePage() {
     mutationFn: () => gameService.undoMove(id!),
     onSuccess: (data: any) => {
       // Reconstruct moves array from API response
-      const moves = (data.moves || []).map((move: any) => ({
-        san: move.san,
-        uci: move.uci,
-        color: move.color,
-        moveNumber: move.moveNumber,
-      }));
+      const moves = [...(data.moves || [])]
+        .sort((a: any, b: any) => (a.moveNumber ?? Number.MAX_SAFE_INTEGER) - (b.moveNumber ?? Number.MAX_SAFE_INTEGER))
+        .map((move: any) => ({
+          san: move.san,
+          uci: move.uci,
+          color: move.color,
+          moveNumber: move.moveNumber,
+        }));
       
       // Use revertToFen to restore game state with moves
       const { revertToFen } = useGameStore.getState();
       revertToFen(data.fen, moves);
+      
+      // Refetch the game to ensure MoveHistory component gets updated moves
+      refetchGame();
     },
   });
 

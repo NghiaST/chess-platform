@@ -74,7 +74,14 @@ export const useGameStore = create<GameState>((set) => ({
     set((state) => ({
       fen: newFen,
       chess: new Chess(newFen),
-      moves: [...state.moves, move],
+      moves: [
+        ...state.moves,
+        {
+          ...move,
+          // Keep a stable sequence number for reliable history rendering.
+          moveNumber: move.moveNumber ?? state.moves.length + 1,
+        },
+      ],
       selectedSquare: null,
     })),
 

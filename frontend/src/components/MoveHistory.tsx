@@ -13,8 +13,11 @@ export default function MoveHistory({ moves }: MoveHistoryProps) {
   // Group moves in pairs: [white, black]
   const movePairs: { white?: Move; black?: Move; pair: number }[] = [];
 
-  // Sort moves by moveNumber to ensure correct ordering
-  const sortedMoves = [...moves].sort((a, b) => (a.moveNumber ?? 0) - (b.moveNumber ?? 0));
+  const sortedMoves = [...moves].sort((a, b) => {
+    const aNum = a.moveNumber ?? Number.MAX_SAFE_INTEGER;
+    const bNum = b.moveNumber ?? Number.MAX_SAFE_INTEGER;
+    return aNum - bNum;
+  });
 
   for (let i = 0; i < sortedMoves.length; i += 2) {
     movePairs.push({
