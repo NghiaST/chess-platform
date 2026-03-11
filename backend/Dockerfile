@@ -1,7 +1,7 @@
 # ── Build stage ──────────────────────────────────────────────────────────────
-FROM node:20-alpine AS builder
+FROM node:20-slim AS builder
 
-RUN apk add --no-cache openssl
+RUN apt-get update && apt-get install -y openssl --no-install-recommends && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -16,12 +16,9 @@ COPY src/ ./src/
 RUN npm run build
 
 # ── Production stage ──────────────────────────────────────────────────────────
-FROM node:20-alpine AS production
+FROM node:20-slim AS production
 
-RUN apk add --no-cache openssl
-
-# Tell Prisma exactly which engine binary to use (bypasses broken auto-detection on Alpine)
-ENV PRISMA_QUERY_ENGINE_LIBRARY=/app/node_modules/.prisma/client/libquery_engine-linux-musl-openssl-3.0.x.so.node
+RUN apt-get update && apt-get install -y openssl --no-install-recommends && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
