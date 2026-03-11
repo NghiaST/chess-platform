@@ -3,7 +3,7 @@ services:
     name: chess-platform-backend
     runtime: node
     rootDir: backend
-    buildCommand: npm install && npm run build
+    buildCommand: npm install --include=dev && npm run build
     startCommand: npx prisma migrate deploy && node dist/server.js
     healthCheckPath: /health
     envVars:
