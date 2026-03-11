@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import ChessBoard from '@/components/ChessBoard';
 import MoveHistory from '@/components/MoveHistory';
+import PracticePanel from '@/components/PracticePanel';
 import { useGameStore } from '@/store/gameStore';
 import { useAuthStore } from '@/store/authStore';
 import { useLobbyStore } from '@/store/lobbyStore';
@@ -195,6 +196,8 @@ export default function GamePage() {
               </div>
             </div>
           </div>
+
+          {gameMode === 'practice' && <PracticePanel />}
 
           {/* Move History */}
           <MoveHistory moves={moves} />
