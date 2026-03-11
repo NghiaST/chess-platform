@@ -20,6 +20,9 @@ FROM node:20-alpine AS production
 
 RUN apk add --no-cache openssl
 
+# Tell Prisma exactly which engine binary to use (bypasses broken auto-detection on Alpine)
+ENV PRISMA_QUERY_ENGINE_LIBRARY=/app/node_modules/.prisma/client/libquery_engine-linux-musl-openssl-3.0.x.so.node
+
 WORKDIR /app
 
 # Install production deps only, skip postinstall (prisma generate)
