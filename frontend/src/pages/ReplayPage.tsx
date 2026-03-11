@@ -37,6 +37,7 @@ export default function ReplayPage() {
   const navigate = useNavigate();
   const [cursor, setCursor] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [speed, setSpeed] = useState<0.5 | 1 | 2>(1);
   const activeRef = useRef<HTMLButtonElement | null>(null);
 
   const { data: game, isLoading, isError } = useQuery({
@@ -77,13 +78,13 @@ export default function ReplayPage() {
   const goLast  = () => { setIsPlaying(false); setCursor(maxCursor); };
   const togglePlay = () => setIsPlaying((p) => !p);
 
-  // Autoplay: advance cursor every 700 ms while playing
+  // Autoplay: advance cursor every (700 / speed) ms while playing
   useEffect(() => {
     if (!isPlaying) return;
     if (safeCursor >= maxCursor) { setIsPlaying(false); return; }
-    const timer = setTimeout(() => setCursor((c) => c + 1), 700);
+    const timer = setTimeout(() => setCursor((c) => c + 1), Math.round(700 / speed));
     return () => clearTimeout(timer);
-  }, [isPlaying, safeCursor, maxCursor]);
+  }, [isPlaying, safeCursor, maxCursor, speed]);
 
   // Keyboard navigation: ← / → / Space
   useEffect(() => {
@@ -166,6 +167,21 @@ export default function ReplayPage() {
             </button>
             <button className="btn-secondary text-base px-3 py-1.5" onClick={goNext}    disabled={safeCursor === maxCursor} title="Next"     >▷</button>
             <button className="btn-secondary text-base px-3 py-1.5" onClick={goLast}    disabled={safeCursor === maxCursor} title="Last"     >⏭</button>
+          </div>
+          <div className="flex items-center gap-1">
+            {([0.5, 1, 2] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setSpeed(s)}
+                className={`text-xs px-2 py-1 rounded transition-colors ${
+                  speed === s
+                    ? 'bg-blue-600 text-white'
+                    : 'btn-secondary'
+                }`}
+              >
+                {s}×
+              </button>
+            ))}
           </div>
           <div className="text-xs text-gray-500 hidden sm:block">← → Space</div>
         </div>
