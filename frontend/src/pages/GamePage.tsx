@@ -213,6 +213,7 @@ export default function GamePage() {
 
           {(gameMode === 'practice' || gameMode === 'study') && (
             <PracticePanel
+              mode={gameMode as 'practice' | 'study'}
               undoEnabled={status === 'active' && moves.length > 0}
               onUndo={handleUndo}
             />
