@@ -18,20 +18,13 @@ export default function HomePage() {
   const { isAuthenticated } = useAuthStore();
   const { initGame } = useGameStore();
   const [selectedMode, setSelectedMode] = useState<GameMode>('standard');
-  const [createError, setCreateError] = useState<string | null>(null);
 
   const createGameMutation = useMutation({
     mutationFn: ({ botLevel, mode }: { botLevel: number; mode: GameMode }) =>
       gameService.createGame({ isBotGame: true, botLevel, mode }),
     onSuccess: (game) => {
-      setCreateError(null);
       initGame(game.id, game.fen, true, game.botLevel ?? 5, null, selectedMode);
       navigate(`/game/${game.id}`);
-    },
-    onError: (error: any) => {
-      const message = error?.response?.data?.message || error?.message || 'Failed to create game';
-      console.error('Create game error:', error);
-      setCreateError(message);
     },
   });
 
@@ -113,12 +106,7 @@ export default function HomePage() {
             </button>
           ))}
         </div>
-        {createError && (
-          <p className="text-red-400 text-center mt-4 text-sm">
-            {createError}
-          </p>
-        )}
-        {createGameMutation.isError && !createError && (
+        {createGameMutation.isError && (
           <p className="text-red-400 text-center mt-4 text-sm">
             Failed to create game. Please try again.
           </p>

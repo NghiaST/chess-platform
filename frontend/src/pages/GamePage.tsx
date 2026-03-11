@@ -33,7 +33,7 @@ export default function GamePage() {
   }, [isAuthenticated, navigate]);
 
   // Load game data
-  const { data: game, isLoading, isError } = useQuery({
+  const { data: game, isLoading, isError, refetch: refetchGame } = useQuery({
     queryKey: ['game', id],
     queryFn: () => gameService.getGame(id!),
     enabled: !!id && isAuthenticated,
@@ -49,6 +49,18 @@ export default function GamePage() {
       }
       const apiMode = (game as { mode?: 'standard' | 'practice' | 'study' }).mode;
       initGame(game.id, game.fen, game.isBotGame, game.botLevel ?? 5, color, apiMode ?? gameMode);
+      
+      // Load moves from API response into Zustand store
+      if (game.moves && game.moves.length > 0) {
+        const reconstructedMoves = game.moves.map((move: any) => ({
+          san: move.san,
+          uci: move.uci,
+          color: move.color,
+        }));
+        const { revertToFen } = useGameStore.getState();
+        revertToFen(game.fen, reconstructedMoves);
+      }
+      
       if (game.status !== 'ACTIVE') {
         setStatus('finished', game.result ?? undefined);
       }
@@ -72,14 +84,20 @@ export default function GamePage() {
   // Undo move (practice/study mode only)
   const undoMutation = useMutation({
     mutationFn: () => gameService.undoMove(id!),
-    onSuccess: (data) => {
-      // Update local game state with the undone game
-      const apiMode = (data as { mode?: 'standard' | 'practice' | 'study' }).mode;
-      initGame(data.id, data.fen, data.isBotGame, data.botLevel ?? 5, myColor, apiMode ?? gameMode);
-    },
-    onError: (error: any) => {
-      const message = error?.response?.data?.message || 'Failed to undo move';
-      console.error('Undo error:', message);
+    onSuccess: (data: any) => {
+      // Reconstruct moves array from API response
+      const moves = (data.moves || []).map((move: any) => ({
+        san: move.san,
+        uci: move.uci,
+        color: move.color,
+      }));
+      
+      // Use revertToFen to restore game state with moves
+      const { revertToFen } = useGameStore.getState();
+      revertToFen(data.fen, moves);
+      
+      // Refetch the game to ensure MoveHistory component gets updated moves
+      refetchGame();
     },
   });
 
