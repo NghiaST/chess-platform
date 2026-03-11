@@ -10,9 +10,23 @@ type PromotionPieceOption = 'wQ' | 'wR' | 'wN' | 'wB' | 'bQ' | 'bR' | 'bB' | 'bN
 
 interface ChessBoardProps {
   gameId: string;
+  /**
+   * For multiplayer: emit a socket move instead of calling the REST API.
+   * When provided, optimistic updates are skipped (server is source of truth).
+   */
+  onMakeMove?: (from: string, to: string, promotion?: string) => void;
+  /** Which side the current player controls. Defaults to 'white'. */
+  boardOrientation?: 'white' | 'black';
+  /** 'w' or 'b' — only allow interaction when it's this side's turn. */
+  allowedColor?: 'w' | 'b';
 }
 
-export default function ChessBoard({ gameId }: ChessBoardProps) {
+export default function ChessBoard({
+  gameId,
+  onMakeMove,
+  boardOrientation = 'white',
+  allowedColor,
+}: ChessBoardProps) {
   const {
     fen,
     chess,
@@ -27,7 +41,6 @@ export default function ChessBoard({ gameId }: ChessBoardProps) {
     setSelectedSquare,
   } = useGameStore();
 
-  const [boardOrientation] = useState<'white' | 'black'>('white');
   // Pending promotion square info for click-based pawn promotion
   const [pendingPromotion, setPendingPromotion] = useState<{ from: string; to: string } | null>(null);
 
@@ -94,10 +107,27 @@ export default function ChessBoard({ gameId }: ChessBoardProps) {
    * We detect promotion by inspecting the source square via chess.js, and extract the chosen
    * promotion type from the `piece` parameter.
    */
+  const dispatchMove = useCallback(
+    (from: string, to: string, promotion?: string) => {
+      if (onMakeMove) {
+        // Multiplayer path: apply locally then let socket confirm
+        applyMoveOptimistically(from, to, promotion);
+        onMakeMove(from, to, promotion);
+      } else {
+        // Bot / solo path: optimistic update + REST call
+        if (applyMoveOptimistically(from, to, promotion)) {
+          makeMoveMutation.mutate({ from, to, promotion });
+        }
+      }
+    },
+    [onMakeMove, applyMoveOptimistically, makeMoveMutation],
+  );
+
   const onDrop = useCallback(
     (sourceSquare: string, targetSquare: string, piece: string): boolean => {
       if (status !== 'active') return false;
-      if (makeMoveMutation.isPending) return false;
+      if (!onMakeMove && makeMoveMutation.isPending) return false;
+      if (allowedColor && chess.turn() !== allowedColor) return false;
 
       const movingPiece = chess.get(sourceSquare as Square);
       const isPromotion =
@@ -105,14 +135,18 @@ export default function ChessBoard({ gameId }: ChessBoardProps) {
         ((movingPiece.color === 'w' && targetSquare[1] === '8') ||
           (movingPiece.color === 'b' && targetSquare[1] === '1'));
 
-      // piece[1] is the promotion type selected in the dialog: Q/R/B/N → q/r/b/n
       const promotion = isPromotion ? piece[1].toLowerCase() : undefined;
 
-      if (!applyMoveOptimistically(sourceSquare, targetSquare, promotion)) return false;
+      if (!onMakeMove && !applyMoveOptimistically(sourceSquare, targetSquare, promotion)) return false;
+      if (onMakeMove) {
+        applyMoveOptimistically(sourceSquare, targetSquare, promotion);
+        onMakeMove(sourceSquare, targetSquare, promotion);
+        return true;
+      }
       makeMoveMutation.mutate({ from: sourceSquare, to: targetSquare, promotion });
       return true;
     },
-    [status, makeMoveMutation, chess, applyMoveOptimistically],
+    [status, onMakeMove, makeMoveMutation, chess, allowedColor, applyMoveOptimistically],
   );
 
   /**
@@ -131,30 +165,26 @@ export default function ChessBoard({ gameId }: ChessBoardProps) {
         return false;
       }
 
-      // Click-based: library doesn't know the from-square, use our stored state
       if (!fromSquare) {
         const from = pendingPromotion?.from;
         const to = (toSquare as string | undefined) ?? pendingPromotion?.to;
         setPendingPromotion(null);
-        if (!from || !to || makeMoveMutation.isPending) return false;
+        if (!from || !to || (!onMakeMove && makeMoveMutation.isPending)) return false;
         const promotion = piece[1].toLowerCase();
-        if (applyMoveOptimistically(from, to, promotion)) {
-          makeMoveMutation.mutate({ from, to, promotion });
-        }
-        // Return false: prevents library calling handleSetPosition(null, toSquare, …)
+        dispatchMove(from, to, promotion);
         return false;
       }
 
-      // Drag-based: return true → library calls handleSetPosition → onPieceDrop fires
       return true;
     },
-    [pendingPromotion, makeMoveMutation, applyMoveOptimistically],
+    [pendingPromotion, onMakeMove, makeMoveMutation, dispatchMove],
   );
 
   const onSquareClick = useCallback(
     (square: Square) => {
       if (status !== 'active') return;
-      if (makeMoveMutation.isPending) return;
+      if (!onMakeMove && makeMoveMutation.isPending) return;
+      if (allowedColor && chess.turn() !== allowedColor) return;
 
       if (selectedSquare) {
         if (selectedSquare !== square) {
@@ -165,15 +195,12 @@ export default function ChessBoard({ gameId }: ChessBoardProps) {
               (movingPiece.color === 'b' && square[1] === '1'));
 
           if (isPromotion) {
-            // Show the promotion dialog via the controlled showPromotionDialog prop
             setPendingPromotion({ from: selectedSquare, to: square });
             setSelectedSquare(null);
             return;
           }
 
-          if (applyMoveOptimistically(selectedSquare, square)) {
-            makeMoveMutation.mutate({ from: selectedSquare, to: square });
-          }
+          dispatchMove(selectedSquare, square);
         }
         setSelectedSquare(null);
       } else {
@@ -181,7 +208,7 @@ export default function ChessBoard({ gameId }: ChessBoardProps) {
         if (piece) setSelectedSquare(square);
       }
     },
-    [status, selectedSquare, chess, makeMoveMutation, applyMoveOptimistically, setSelectedSquare],
+    [status, onMakeMove, selectedSquare, chess, makeMoveMutation, allowedColor, dispatchMove, setSelectedSquare],
   );
 
   const getResultMessage = () => {
@@ -198,6 +225,12 @@ export default function ChessBoard({ gameId }: ChessBoardProps) {
       {status === 'finished' && (
         <div className="w-full bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-center">
           <p className="text-yellow-400 font-bold text-lg">Game Over — {getResultMessage()}</p>
+        </div>
+      )}
+
+      {allowedColor && chess.turn() !== allowedColor && status === 'active' && (
+        <div className="w-full bg-blue-500/10 border border-blue-500/30 rounded-lg p-2 text-center">
+          <p className="text-blue-400 font-semibold">Opponent's turn</p>
         </div>
       )}
 

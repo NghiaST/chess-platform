@@ -5,14 +5,26 @@ import ChessBoard from '@/components/ChessBoard';
 import MoveHistory from '@/components/MoveHistory';
 import { useGameStore } from '@/store/gameStore';
 import { useAuthStore } from '@/store/authStore';
+import { useLobbyStore } from '@/store/lobbyStore';
+import { useMultiplayerGame } from '@/hooks/useMultiplayerGame';
 import { gameService } from '@/services/game.service';
 
 export default function GamePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuthStore();
-  const { gameId, status, result, moves, isBotGame, botLevel, ratingDelta, initGame, setStatus, setRatingDelta, resetGame } =
+  const { isAuthenticated, user } = useAuthStore();
+  const { gameId, status, result, moves, isBotGame, botLevel, myColor, ratingDelta, initGame, setStatus, setRatingDelta, resetGame } =
     useGameStore();
+  const { myColor: lobbyColor, reset: resetLobby } = useLobbyStore();
+
+  // Resolve the player's color: from lobby store (just matched) or from loaded game data
+  const resolvedColor = myColor ?? lobbyColor;
+
+  // Multiplayer socket hook — only active for non-bot games
+  const { opponentConnected, opponentUsername, emitMove, emitResign } = useMultiplayerGame(
+    !isBotGame && gameId ? gameId : null,
+    resolvedColor,
+  );
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -26,16 +38,24 @@ export default function GamePage() {
     enabled: !!id && isAuthenticated,
   });
 
-  // Initialize game store from API data
+  // Initialize game store from API data (only when not already initialised via lobby)
   useEffect(() => {
     if (game && gameId !== game.id) {
-      initGame(game.id, game.fen, game.isBotGame, game.botLevel ?? 5);
+      // Determine color from game data (for direct URL visits / reconnects)
+      let color: 'white' | 'black' | null = null;
+      if (!game.isBotGame && user) {
+        color = game.whitePlayerId === user.id ? 'white' : 'black';
+      }
+      initGame(game.id, game.fen, game.isBotGame, game.botLevel ?? 5, color);
       if (game.status !== 'ACTIVE') {
         setStatus('finished', game.result ?? undefined);
       }
     }
-  }, [game, gameId, initGame, setStatus]);
+    // After first init from lobby, clear the lobby state
+    if (game && lobbyColor) resetLobby();
+  }, [game, gameId, user, lobbyColor, initGame, setStatus, resetLobby]);
 
+  // Bot resign via REST; multiplayer resign via socket
   const resignMutation = useMutation({
     mutationFn: () => gameService.resign(id!),
     onSuccess: (data) => {
@@ -45,8 +65,11 @@ export default function GamePage() {
   });
 
   const handleResign = () => {
-    if (window.confirm('Are you sure you want to resign?')) {
+    if (!window.confirm('Are you sure you want to resign?')) return;
+    if (isBotGame) {
       resignMutation.mutate();
+    } else {
+      emitResign();
     }
   };
 
@@ -74,6 +97,9 @@ export default function GamePage() {
     );
   }
 
+  const boardOrientation = resolvedColor ?? 'white';
+  const allowedColor = resolvedColor === 'black' ? 'b' : 'w';
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
       {/* Header */}
@@ -85,10 +111,15 @@ export default function GamePage() {
           <p className="text-gray-400 text-sm mt-1">
             {status === 'active' ? 'Game in progress' : `Game over — ${result ?? 'Unknown result'}`}
           </p>
+          {!isBotGame && status === 'active' && (
+            <p className={`text-xs mt-1 ${opponentConnected ? 'text-green-400' : 'text-yellow-400 animate-pulse'}`}>
+              {opponentConnected
+                ? `${opponentUsername ?? 'Opponent'} is connected`
+                : 'Waiting for opponent to connect...'}
+            </p>
+          )}
           {status === 'finished' && ratingDelta !== null && (
-            <p className={`text-sm font-bold mt-1 ${
-              ratingDelta >= 0 ? 'text-green-400' : 'text-red-400'
-            }`}>
+            <p className={`text-sm font-bold mt-1 ${ratingDelta >= 0 ? 'text-green-400' : 'text-red-400'}`}>
               Rating: {ratingDelta >= 0 ? '+' : ''}{ratingDelta}
             </p>
           )}
@@ -113,7 +144,14 @@ export default function GamePage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Chess Board */}
         <div className="lg:col-span-2">
-          {id && <ChessBoard gameId={id} />}
+          {id && (
+            <ChessBoard
+              gameId={id}
+              boardOrientation={boardOrientation}
+              onMakeMove={!isBotGame ? emitMove : undefined}
+              allowedColor={!isBotGame ? allowedColor : undefined}
+            />
+          )}
         </div>
 
         {/* Sidebar */}
@@ -131,15 +169,15 @@ export default function GamePage() {
                     {game.whitePlayer?.username ?? 'Unknown'}
                   </span>
                 </div>
-                <span className="text-gray-400 text-sm">
-                  {game.whitePlayer?.rating ?? '-'}
-                </span>
+                <span className="text-gray-400 text-sm">{game.whitePlayer?.rating ?? '-'}</span>
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-5 h-5 rounded-full bg-gray-900 border border-gray-500" />
                   <span className="text-white font-medium">
-                    {isBotGame ? `Bot (Lv.${botLevel})` : game.blackPlayer?.username ?? 'Opponent'}
+                    {isBotGame
+                      ? `Bot (Lv.${botLevel})`
+                      : game.blackPlayer?.username ?? opponentUsername ?? 'Opponent'}
                   </span>
                 </div>
                 <span className="text-gray-400 text-sm">
@@ -151,14 +189,6 @@ export default function GamePage() {
 
           {/* Move History */}
           <MoveHistory moves={moves} />
-
-          {/* PGN Export — Phase 3 */}
-          <div className="card p-4 opacity-50">
-            <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-2">
-              PGN Export
-            </h3>
-            <p className="text-gray-500 text-xs">Available after game ends (Phase 3)</p>
-          </div>
         </div>
       </div>
     </div>

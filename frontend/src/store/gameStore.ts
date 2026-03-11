@@ -16,11 +16,12 @@ interface GameState {
   result: string | null;
   isBotGame: boolean;
   botLevel: number;
+  myColor: 'white' | 'black' | null;
   selectedSquare: Square | null;
   ratingDelta: number | null;
 
   // Actions
-  initGame: (gameId: string, fen: string, isBotGame: boolean, botLevel: number) => void;
+  initGame: (gameId: string, fen: string, isBotGame: boolean, botLevel: number, myColor?: 'white' | 'black' | null) => void;
   applyMove: (move: Move, newFen: string) => void;
   revertToFen: (previousFen: string, previousMoves: Move[]) => void;
   setStatus: (status: 'idle' | 'active' | 'finished', result?: string | null) => void;
@@ -40,10 +41,11 @@ export const useGameStore = create<GameState>((set) => ({
   result: null,
   isBotGame: true,
   botLevel: 5,
+  myColor: null,
   selectedSquare: null,
   ratingDelta: null,
 
-  initGame: (gameId, fen, isBotGame, botLevel) =>
+  initGame: (gameId, fen, isBotGame, botLevel, myColor = null) =>
     set({
       gameId,
       fen,
@@ -53,6 +55,7 @@ export const useGameStore = create<GameState>((set) => ({
       result: null,
       isBotGame,
       botLevel,
+      myColor,
       selectedSquare: null,
     }),
 
@@ -84,6 +87,7 @@ export const useGameStore = create<GameState>((set) => ({
       moves: [],
       status: 'idle',
       result: null,
+      myColor: null,
       ratingDelta: null,
       selectedSquare: null,
     }),

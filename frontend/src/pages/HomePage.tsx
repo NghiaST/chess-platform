@@ -76,15 +76,21 @@ export default function HomePage() {
         )}
       </div>
 
-      {/* Play Online (Coming Soon) */}
-      <div className="card p-8 text-center opacity-60">
+      {/* Play Online */}
+      <div className="card p-8 text-center">
         <div className="text-4xl mb-4">🌐</div>
         <h2 className="text-2xl font-bold text-white mb-2">Play Online</h2>
-        <p className="text-gray-400">
-          Real-time multiplayer — Coming in a future update.
+        <p className="text-gray-400 mb-4">
+          Challenge a real player in real-time. Ratings update after every game.
         </p>
-        <button disabled className="btn-primary mt-4 opacity-50 cursor-not-allowed">
-          Coming Soon
+        <button
+          onClick={() => {
+            if (!isAuthenticated) { navigate('/login'); return; }
+            navigate('/lobby');
+          }}
+          className="btn-primary mt-2"
+        >
+          Find Opponent
         </button>
       </div>
     </div>
