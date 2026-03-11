@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import api from '@/services/api';
 
 interface GameHistoryItem {
@@ -117,6 +117,7 @@ export default function ProfilePage() {
                   <th className="text-center text-xs uppercase text-gray-500 tracking-wide py-2 px-4">Result</th>
                   <th className="text-right text-xs uppercase text-gray-500 tracking-wide py-2 px-4">Rating</th>
                   <th className="text-right text-xs uppercase text-gray-500 tracking-wide py-2 px-4">Moves</th>
+                  <th className="text-right text-xs uppercase text-gray-500 tracking-wide py-2 px-4">Replay</th>
                 </tr>
               </thead>
               <tbody>
@@ -142,6 +143,14 @@ export default function ProfilePage() {
                       )}
                     </td>
                     <td className="py-3 px-4 text-right text-gray-400">{g.moveCount}</td>
+                    <td className="py-3 px-4 text-right">
+                      <Link
+                        to={`/game/${g.id}/replay`}
+                        className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                      >
+                        Watch
+                      </Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>
