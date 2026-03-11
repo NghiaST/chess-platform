@@ -409,24 +409,26 @@ export default function ChessBoard({
 
   return (
     <div className="flex flex-col items-center gap-4">
-      {/* Status Banner */}
-      {status === 'finished' && (
-        <div className="w-full bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-center">
-          <p className="text-yellow-400 font-bold text-lg">Game Over — {getResultMessage()}</p>
-        </div>
-      )}
+      {/* Status Banner - Fixed height container to prevent layout shift */}
+      <div className="w-full min-h-[60px] flex items-center justify-center">
+        {status === 'finished' && (
+          <div className="w-full bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-center">
+            <p className="text-yellow-400 font-bold text-lg">Game Over — {getResultMessage()}</p>
+          </div>
+        )}
 
-      {allowedColor && chess.turn() !== allowedColor && status === 'active' && (
-        <div className="w-full bg-blue-500/10 border border-blue-500/30 rounded-lg p-2 text-center">
-          <p className="text-blue-400 font-semibold">Opponent's turn</p>
-        </div>
-      )}
+        {allowedColor && chess.turn() !== allowedColor && status === 'active' && (
+          <div className="w-full bg-blue-500/10 border border-blue-500/30 rounded-lg p-2 text-center">
+            <p className="text-blue-400 font-semibold">Opponent's turn</p>
+          </div>
+        )}
 
-      {chess.inCheck() && status === 'active' && (
-        <div className="w-full bg-red-500/10 border border-red-500/30 rounded-lg p-2 text-center">
-          <p className="text-red-400 font-semibold">Check!</p>
-        </div>
-      )}
+        {chess.inCheck() && status === 'active' && (
+          <div className="w-full bg-red-500/10 border border-red-500/30 rounded-lg p-2 text-center">
+            <p className="text-red-400 font-semibold">Check!</p>
+          </div>
+        )}
+      </div>
 
       {/* Chess Board */}
       <div
