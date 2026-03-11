@@ -37,7 +37,18 @@ export class GameRepository {
   findById(id: string) {
     return prisma.game.findUnique({
       where: { id },
-      include: {
+      select: {
+        id: true,
+        whitePlayerId: true,
+        blackPlayerId: true,
+        isBotGame: true,
+        botLevel: true,
+        mode: true,
+        status: true,
+        result: true,
+        fen: true,
+        createdAt: true,
+        updatedAt: true,
         moves: { orderBy: { moveNumber: 'asc' } },
         whitePlayer: { select: { id: true, username: true, rating: true } },
         blackPlayer: { select: { id: true, username: true, rating: true } },
@@ -59,7 +70,18 @@ export class GameRepository {
     return prisma.game.update({
       where: { id: gameId },
       data: { fen, status, result },
-      include: {
+      select: {
+        id: true,
+        whitePlayerId: true,
+        blackPlayerId: true,
+        isBotGame: true,
+        botLevel: true,
+        mode: true,
+        status: true,
+        result: true,
+        fen: true,
+        createdAt: true,
+        updatedAt: true,
         moves: { orderBy: { moveNumber: 'asc' } },
       },
     });
