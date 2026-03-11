@@ -3,6 +3,7 @@ import { GameStatus, GameResult } from '@prisma/client';
 import { GameRepository } from '../repositories/game.repository';
 import { UserRepository } from '../repositories/user.repository';
 import { AppError } from '../middlewares/errorHandler';
+import { getBotMove } from './bot.service';
 
 const gameRepo = new GameRepository();
 const userRepo = new UserRepository();
@@ -112,6 +113,68 @@ export class GameService {
       result,
     });
 
+    // If this is a bot game and the game is still active, make the bot's move
+    if (game.isBotGame && newStatus === GameStatus.ACTIVE) {
+      try {
+        const botUci = await getBotMove(newFen, game.botLevel ?? 5);
+        const botFrom = botUci.slice(0, 2);
+        const botTo = botUci.slice(2, 4);
+        const botPromotion = botUci.length > 4 ? botUci[4] : undefined;
+
+        const botChess = new Chess(newFen);
+        const botMoveResult = botChess.move({ from: botFrom, to: botTo, promotion: botPromotion as 'q' | 'r' | 'b' | 'n' | undefined });
+
+        if (botMoveResult) {
+          const botMoveNumber = botChess.history().length;
+          const botFen = botChess.fen();
+
+          let botStatus: GameStatus = GameStatus.ACTIVE;
+          let botResult: GameResult | null = null;
+          if (botChess.isCheckmate()) {
+            botStatus = GameStatus.FINISHED;
+            botResult = GameResult.BLACK_WIN;
+          } else if (botChess.isDraw() || botChess.isStalemate()) {
+            botStatus = GameStatus.FINISHED;
+            botResult = GameResult.DRAW;
+          }
+
+          await gameRepo.addMove({
+            gameId,
+            moveNumber: botMoveNumber,
+            san: botMoveResult.san,
+            uci: botUci,
+            color: 'b',
+          });
+
+          const finalGame = await gameRepo.updateFenAndStatus({
+            gameId,
+            fen: botFen,
+            status: botStatus,
+            result: botResult,
+          });
+
+          return {
+            game: finalGame,
+            move: {
+              san: moveResult.san,
+              uci: `${from}${to}${promotion ?? ''}`,
+              fen: newFen,
+            },
+            botMove: {
+              san: botMoveResult.san,
+              uci: botUci,
+              fen: botFen,
+            },
+            isGameOver: botStatus === GameStatus.FINISHED,
+            result: botResult ? String(botResult) : null,
+          };
+        }
+      } catch (err) {
+        // Bot move failed – log and return game state without bot move
+        console.error('Bot move error:', err);
+      }
+    }
+
     return {
       game: updatedGame,
       move: {
@@ -119,6 +182,7 @@ export class GameService {
         uci: `${from}${to}${promotion ?? ''}`,
         fen: newFen,
       },
+      botMove: null,
       isGameOver: newStatus === GameStatus.FINISHED,
       result: result ? String(result) : null,
     };

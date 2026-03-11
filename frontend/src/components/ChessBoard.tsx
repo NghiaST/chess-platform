@@ -27,10 +27,18 @@ export default function ChessBoard({ gameId }: ChessBoardProps) {
     mutationFn: (moveData: { from: string; to: string; promotion?: string }) =>
       gameService.makeMove(gameId, moveData),
     onSuccess: (data) => {
+      // Apply the player's move
       applyMove(
         { san: data.move.san, uci: data.move.uci, color: chess.turn() === 'w' ? 'b' : 'w' },
         data.move.fen
       );
+      // Apply the bot's response move if present
+      if (data.botMove) {
+        applyMove(
+          { san: data.botMove.san, uci: data.botMove.uci, color: 'b' },
+          data.botMove.fen
+        );
+      }
       if (data.isGameOver) {
         setStatus('finished', data.result ?? undefined);
       }
