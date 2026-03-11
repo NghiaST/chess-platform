@@ -28,6 +28,23 @@ function pixelToSquare(
   return `${'abcdefgh'[fileIdx]}${rankIdx + 1}` as Square;
 }
 
+/** Converts a square (e.g. e4) to board pixel center coordinates. */
+function squareToCenter(
+  square: Square,
+  boardSize: number,
+  orientation: 'white' | 'black',
+): { x: number; y: number } {
+  const file = square.charCodeAt(0) - 'a'.charCodeAt(0);
+  const rank = Number(square[1]) - 1;
+  const displayFile = orientation === 'white' ? file : 7 - file;
+  const displayRankFromTop = orientation === 'white' ? 7 - rank : rank;
+  const cell = boardSize / 8;
+  return {
+    x: (displayFile + 0.5) * cell,
+    y: (displayRankFromTop + 0.5) * cell,
+  };
+}
+
 interface ChessBoardProps {
   gameId: string;
   /**
@@ -68,8 +85,26 @@ export default function ChessBoard({
   const [managedArrows, setManagedArrows] = useState<Arrow[]>([]);
   const rightDragStart = useRef<Square | null>(null);
   const boardContainerRef = useRef<HTMLDivElement>(null);
+  const [boardPx, setBoardPx] = useState(0);
   const annotationColorRef = useRef(annotationColor);
   useEffect(() => { annotationColorRef.current = annotationColor; }, [annotationColor]);
+
+  useEffect(() => {
+    const updateBoardSize = () => {
+      setBoardPx(boardContainerRef.current?.clientWidth ?? 0);
+    };
+
+    updateBoardSize();
+    window.addEventListener('resize', updateBoardSize);
+
+    const observer = new ResizeObserver(updateBoardSize);
+    if (boardContainerRef.current) observer.observe(boardContainerRef.current);
+
+    return () => {
+      window.removeEventListener('resize', updateBoardSize);
+      observer.disconnect();
+    };
+  }, []);
 
   const clearAnnotations = useCallback(() => {
     setCircleSquares(new Set());
@@ -344,6 +379,34 @@ export default function ChessBoard({
     return styles;
   }, [selectedSquare, showLegalMoves, chess, circleSquares, annotationColor]);
 
+  const renderedArrows = useMemo(() => {
+    if (!boardPx) return [];
+
+    return managedArrows
+      .map((a, idx) => {
+        const from = squareToCenter(a[0] as Square, boardPx, boardOrientation);
+        const to = squareToCenter(a[1] as Square, boardPx, boardOrientation);
+        const dx = to.x - from.x;
+        const dy = to.y - from.y;
+        const r = Math.hypot(dx, dy);
+        if (!r) return null;
+
+        const reducer = boardPx / 32;
+        const end = {
+          x: from.x + (dx * (r - reducer)) / r,
+          y: from.y + (dy * (r - reducer)) / r,
+        };
+
+        return {
+          id: `managed-arrow-${idx}`,
+          color: a[2] ?? annotationColor,
+          from,
+          end,
+        };
+      })
+      .filter((v): v is { id: string; color: string; from: { x: number; y: number }; end: { x: number; y: number } } => !!v);
+  }, [managedArrows, boardPx, boardOrientation, annotationColor]);
+
   return (
     <div className="flex flex-col items-center gap-4">
       {/* Status Banner */}
@@ -368,7 +431,7 @@ export default function ChessBoard({
       {/* Chess Board */}
       <div
         ref={boardContainerRef}
-        className="w-full max-w-[540px]"
+        className="w-full max-w-[540px] relative"
         onMouseDown={handleBoardMouseDown}
         onMouseUp={handleBoardMouseUp}
         onMouseLeave={() => { rightDragStart.current = null; }}
@@ -391,10 +454,40 @@ export default function ChessBoard({
           customLightSquareStyle={{ backgroundColor: '#F0D9B5' }}
           customSquareStyles={customSquareStyles}
           areArrowsAllowed={false}
-          customArrows={managedArrows}
-          customArrowColor={annotationColor}
           animationDuration={150}
         />
+
+        {/* Custom arrow layer with fixed length behavior (no shortening on shared destination) */}
+        <svg
+          width={boardPx}
+          height={boardPx}
+          style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', zIndex: 10 }}
+        >
+          {renderedArrows.map((arrow) => (
+            <g key={arrow.id}>
+              <marker
+                id={`${arrow.id}-head`}
+                markerWidth="2"
+                markerHeight="2.5"
+                refX="1.25"
+                refY="1.25"
+                orient="auto"
+              >
+                <polygon points="0.3 0, 2 1.25, 0.3 2.5" fill={arrow.color} />
+              </marker>
+              <line
+                x1={arrow.from.x}
+                y1={arrow.from.y}
+                x2={arrow.end.x}
+                y2={arrow.end.y}
+                opacity="0.65"
+                stroke={arrow.color}
+                strokeWidth={boardPx / 40}
+                markerEnd={`url(#${arrow.id}-head)`}
+              />
+            </g>
+          ))}
+        </svg>
       </div>
 
       {/* Turn indicator */}
