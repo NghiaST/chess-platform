@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Chess, Square } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 import { useMutation } from '@tanstack/react-query';
@@ -44,7 +44,30 @@ export default function ChessBoard({
     setSelectedSquare,
   } = useGameStore();
   const { user, updateRating } = useAuthStore();
-  const { showLegalMoves } = useSettingsStore();
+  const { showLegalMoves, annotationColor } = useSettingsStore();
+
+  // Right-click circle markers (transient UI state — cleared on move dispatch)
+  const [circleSquares, setCircleSquares] = useState<Set<Square>>(new Set());
+
+  const onSquareRightClick = useCallback((square: Square) => {
+    setCircleSquares((prev) => {
+      const next = new Set(prev);
+      if (next.has(square)) next.delete(square);
+      else next.add(square);
+      return next;
+    });
+  }, []);
+
+  // Hotkey C — clear all annotations
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.key === 'c' || e.key === 'C') && !e.ctrlKey && !e.metaKey) {
+        setCircleSquares(new Set());
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   // Pending promotion square info for click-based pawn promotion
   const [pendingPromotion, setPendingPromotion] = useState<{ from: string; to: string } | null>(null);
@@ -220,6 +243,7 @@ export default function ChessBoard({
         }
 
         dispatchMove(selectedSquare, square);
+        setCircleSquares(new Set()); // clear annotations on move
         setSelectedSquare(null);
       } else {
         const piece = chess.get(square);
@@ -253,8 +277,13 @@ export default function ChessBoard({
       }
     }
 
+    // Circle annotations from right-click (drawn on top)
+    for (const sq of circleSquares) {
+      styles[sq] = { ...styles[sq], boxShadow: `inset 0 0 0 4px ${annotationColor}` };
+    }
+
     return styles;
-  }, [selectedSquare, showLegalMoves, chess]);
+  }, [selectedSquare, showLegalMoves, chess, circleSquares, annotationColor]);
 
   return (
     <div className="flex flex-col items-center gap-4">
@@ -295,7 +324,9 @@ export default function ChessBoard({
           customDarkSquareStyle={{ backgroundColor: '#B58863' }}
           customLightSquareStyle={{ backgroundColor: '#F0D9B5' }}
           customSquareStyles={customSquareStyles}
+          onSquareRightClick={onSquareRightClick}
           areArrowsAllowed={true}
+          customArrowColor={annotationColor}
           animationDuration={150}
         />
       </div>
