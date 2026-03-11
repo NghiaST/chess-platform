@@ -30,6 +30,9 @@ export default function Layout() {
               <Link to="/leaderboard" className="text-gray-300 hover:text-white transition-colors text-sm">
                 Leaderboard
               </Link>
+              <Link to="/settings" className="text-gray-300 hover:text-white transition-colors text-sm">
+                Settings
+              </Link>
 
               {isAuthenticated ? (
                 <div className="flex items-center gap-4">

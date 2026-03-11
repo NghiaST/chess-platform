@@ -5,6 +5,7 @@ import GamePage from '@/pages/GamePage';
 import LobbyPage from '@/pages/LobbyPage';
 import ProfilePage from '@/pages/ProfilePage';
 import ReplayPage from '@/pages/ReplayPage';
+import SettingsPage from '@/pages/SettingsPage';
 import LeaderboardPage from '@/pages/LeaderboardPage';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
@@ -19,6 +20,7 @@ function App() {
           <Route path="/lobby" element={<LobbyPage />} />
           <Route path="/game/:id" element={<GamePage />} />
           <Route path="/game/:id/replay" element={<ReplayPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route path="/profile/:id" element={<ProfilePage />} />
           <Route path="/login" element={<LoginPage />} />
