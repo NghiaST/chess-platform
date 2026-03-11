@@ -7,6 +7,56 @@ import { validate } from '../middlewares/validate';
 const router = Router();
 const authController = new AuthController();
 
+/**
+ * @swagger
+ * tags:
+ *   name: Auth
+ *   description: Register and login
+ */
+
+/**
+ * @swagger
+ * /api/auth/register:
+ *   post:
+ *     summary: Register a new user
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [username, email, password]
+ *             properties:
+ *               username:
+ *                 type: string
+ *                 minLength: 3
+ *                 maxLength: 20
+ *                 example: player1
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: player1@example.com
+ *               password:
+ *                 type: string
+ *                 minLength: 8
+ *                 example: secret123
+ *     responses:
+ *       201:
+ *         description: Registered successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthResponse'
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       409:
+ *         description: Email or username already taken
+ */
 // POST /api/auth/register
 router.post(
   '/register',
@@ -27,6 +77,37 @@ router.post(
   authController.register
 );
 
+/**
+ * @swagger
+ * /api/auth/login:
+ *   post:
+ *     summary: Login with email and password
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, password]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: player1@example.com
+ *               password:
+ *                 type: string
+ *                 example: secret123
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthResponse'
+ *       401:
+ *         description: Invalid credentials
+ */
 // POST /api/auth/login
 router.post(
   '/login',
