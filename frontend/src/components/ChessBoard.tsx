@@ -6,7 +6,7 @@ import { useGameStore } from '@/store/gameStore';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { gameService } from '@/services/game.service';
-import { getLegalMoveSquares } from '@/utils/chessHelpers';
+import { getLegalMoveSquares, isOwnPiece } from '@/utils/chessHelpers';
 
 // Mirrors react-chessboard's internal type (not re-exported from package root)
 type PromotionPieceOption = 'wQ' | 'wR' | 'wN' | 'wB' | 'bQ' | 'bR' | 'bB' | 'bN';
@@ -195,21 +195,31 @@ export default function ChessBoard({
       if (allowedColor && chess.turn() !== allowedColor) return;
 
       if (selectedSquare) {
-        if (selectedSquare !== square) {
-          const movingPiece = chess.get(selectedSquare);
-          const isPromotion =
-            movingPiece?.type === 'p' &&
-            ((movingPiece.color === 'w' && square[1] === '8') ||
-              (movingPiece.color === 'b' && square[1] === '1'));
-
-          if (isPromotion) {
-            setPendingPromotion({ from: selectedSquare, to: square });
-            setSelectedSquare(null);
-            return;
-          }
-
-          dispatchMove(selectedSquare, square);
+        if (selectedSquare === square) {
+          // Clicking the same square deselects
+          setSelectedSquare(null);
+          return;
         }
+
+        // If the clicked square has one of the current player's own pieces, switch selection
+        if (isOwnPiece(chess, square)) {
+          setSelectedSquare(square);
+          return;
+        }
+
+        const movingPiece = chess.get(selectedSquare);
+        const isPromotion =
+          movingPiece?.type === 'p' &&
+          ((movingPiece.color === 'w' && square[1] === '8') ||
+            (movingPiece.color === 'b' && square[1] === '1'));
+
+        if (isPromotion) {
+          setPendingPromotion({ from: selectedSquare, to: square });
+          setSelectedSquare(null);
+          return;
+        }
+
+        dispatchMove(selectedSquare, square);
         setSelectedSquare(null);
       } else {
         const piece = chess.get(square);
