@@ -1,10 +1,12 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Chess, Square } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 import { useMutation } from '@tanstack/react-query';
 import { useGameStore } from '@/store/gameStore';
 import { useAuthStore } from '@/store/authStore';
+import { useSettingsStore } from '@/store/settingsStore';
 import { gameService } from '@/services/game.service';
+import { getLegalMoveSquares } from '@/utils/chessHelpers';
 
 // Mirrors react-chessboard's internal type (not re-exported from package root)
 type PromotionPieceOption = 'wQ' | 'wR' | 'wN' | 'wB' | 'bQ' | 'bR' | 'bB' | 'bN';
@@ -42,6 +44,7 @@ export default function ChessBoard({
     setSelectedSquare,
   } = useGameStore();
   const { user, updateRating } = useAuthStore();
+  const { showLegalMoves } = useSettingsStore();
 
   // Pending promotion square info for click-based pawn promotion
   const [pendingPromotion, setPendingPromotion] = useState<{ from: string; to: string } | null>(null);
@@ -224,6 +227,25 @@ export default function ChessBoard({
     return result;
   };
 
+  const customSquareStyles = useMemo(() => {
+    const styles: Record<string, React.CSSProperties> = {};
+
+    if (selectedSquare) {
+      styles[selectedSquare] = { backgroundColor: 'rgba(255, 255, 0, 0.4)' };
+    }
+
+    if (showLegalMoves && selectedSquare) {
+      for (const sq of getLegalMoveSquares(chess, selectedSquare)) {
+        const hasOccupant = !!chess.get(sq);
+        styles[sq] = hasOccupant
+          ? { background: 'radial-gradient(circle, transparent 60%, rgba(0,0,0,0.25) 60%)' }
+          : { background: 'radial-gradient(circle, rgba(0,0,0,0.25) 25%, transparent 25%)' };
+      }
+    }
+
+    return styles;
+  }, [selectedSquare, showLegalMoves, chess]);
+
   return (
     <div className="flex flex-col items-center gap-4">
       {/* Status Banner */}
@@ -262,11 +284,7 @@ export default function ChessBoard({
           }}
           customDarkSquareStyle={{ backgroundColor: '#B58863' }}
           customLightSquareStyle={{ backgroundColor: '#F0D9B5' }}
-          customSquareStyles={
-            selectedSquare
-              ? { [selectedSquare]: { backgroundColor: 'rgba(255, 255, 0, 0.4)' } }
-              : {}
-          }
+          customSquareStyles={customSquareStyles}
           areArrowsAllowed={true}
           animationDuration={150}
         />
