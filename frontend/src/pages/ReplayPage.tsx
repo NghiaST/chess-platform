@@ -160,11 +160,11 @@ export default function ReplayPage() {
           </div>
           <div className="flex items-center gap-1">
             <button className="btn-secondary text-base px-3 py-1.5" onClick={goFirst}   disabled={safeCursor === 0}        title="First"    >⏮</button>
-            <button className="btn-secondary text-base px-3 py-1.5" onClick={goPrev}    disabled={safeCursor === 0}        title="Previous" >◀</button>
+            <button className="btn-secondary text-base px-3 py-1.5" onClick={goPrev}    disabled={safeCursor === 0}        title="Previous" >◁</button>
             <button className="btn-secondary text-base px-3 py-1.5" onClick={togglePlay} disabled={safeCursor === maxCursor && !isPlaying} title={isPlaying ? 'Pause' : 'Play'}>
               {isPlaying ? '⏸' : '▶'}
             </button>
-            <button className="btn-secondary text-base px-3 py-1.5" onClick={goNext}    disabled={safeCursor === maxCursor} title="Next"     >▶▶</button>
+            <button className="btn-secondary text-base px-3 py-1.5" onClick={goNext}    disabled={safeCursor === maxCursor} title="Next"     >▷</button>
             <button className="btn-secondary text-base px-3 py-1.5" onClick={goLast}    disabled={safeCursor === maxCursor} title="Last"     >⏭</button>
           </div>
           <div className="text-xs text-gray-500 hidden sm:block">← → Space</div>
