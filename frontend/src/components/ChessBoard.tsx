@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Chess, Square } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
+import type { Arrow } from 'react-chessboard/dist/chessboard/types';
 import { useMutation } from '@tanstack/react-query';
 import { useGameStore } from '@/store/gameStore';
 import { useAuthStore } from '@/store/authStore';
@@ -10,6 +11,22 @@ import { getLegalMoveSquares, isOwnPiece } from '@/utils/chessHelpers';
 
 // Mirrors react-chessboard's internal type (not re-exported from package root)
 type PromotionPieceOption = 'wQ' | 'wR' | 'wN' | 'wB' | 'bQ' | 'bR' | 'bB' | 'bN';
+
+/** Maps a pointer position inside the board container rect to a chess square. */
+function pixelToSquare(
+  rect: DOMRect,
+  x: number,
+  y: number,
+  orientation: 'white' | 'black',
+): Square | null {
+  const relX = (x - rect.left) / rect.width;
+  const relY = (y - rect.top) / rect.height;
+  if (relX < 0 || relX > 1 || relY < 0 || relY > 1) return null;
+  const fileIdx = orientation === 'white' ? Math.floor(relX * 8) : 7 - Math.floor(relX * 8);
+  const rankIdx = orientation === 'white' ? 7 - Math.floor(relY * 8) : Math.floor(relY * 8);
+  if (fileIdx < 0 || fileIdx > 7 || rankIdx < 0 || rankIdx > 7) return null;
+  return `${'abcdefgh'[fileIdx]}${rankIdx + 1}` as Square;
+}
 
 interface ChessBoardProps {
   gameId: string;
@@ -46,28 +63,66 @@ export default function ChessBoard({
   const { user, updateRating } = useAuthStore();
   const { showLegalMoves, annotationColor } = useSettingsStore();
 
-  // Right-click circle markers (transient UI state — cleared on move dispatch)
+  // Annotation state: circles (right-click single square) + arrows (right-click drag)
   const [circleSquares, setCircleSquares] = useState<Set<Square>>(new Set());
+  const [managedArrows, setManagedArrows] = useState<Arrow[]>([]);
+  const rightDragStart = useRef<Square | null>(null);
+  const boardContainerRef = useRef<HTMLDivElement>(null);
+  const annotationColorRef = useRef(annotationColor);
+  useEffect(() => { annotationColorRef.current = annotationColor; }, [annotationColor]);
 
-  const onSquareRightClick = useCallback((square: Square) => {
-    setCircleSquares((prev) => {
-      const next = new Set(prev);
-      if (next.has(square)) next.delete(square);
-      else next.add(square);
-      return next;
-    });
+  const clearAnnotations = useCallback(() => {
+    setCircleSquares(new Set());
+    setManagedArrows([]);
   }, []);
+
+  // Right-click mouse-down: record starting square for potential arrow drag
+  const handleBoardMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 2) return;
+    const rect = boardContainerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    rightDragStart.current = pixelToSquare(rect, e.clientX, e.clientY, boardOrientation);
+  }, [boardOrientation]);
+
+  // Right-click mouse-up: single click = toggle circle, drag = toggle arrow
+  const handleBoardMouseUp = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 2) return;
+    const start = rightDragStart.current;
+    rightDragStart.current = null;
+    if (!start) return;
+    const rect = boardContainerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const end = pixelToSquare(rect, e.clientX, e.clientY, boardOrientation);
+    if (!end) return;
+
+    if (start === end) {
+      setCircleSquares((prev) => {
+        const next = new Set(prev);
+        if (next.has(start)) next.delete(start);
+        else next.add(start);
+        return next;
+      });
+    } else {
+      setManagedArrows((prev) => {
+        const exists = prev.some((a) => a[0] === start && a[1] === end);
+        if (exists) return prev.filter((a) => !(a[0] === start && a[1] === end));
+        // Remove existing arrow to same destination to prevent shortening
+        const filtered = prev.filter((a) => a[1] !== end);
+        return [...filtered, [start, end, annotationColorRef.current]];
+      });
+    }
+  }, [boardOrientation]);
 
   // Hotkey C — clear all annotations
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.key === 'c' || e.key === 'C') && !e.ctrlKey && !e.metaKey) {
-        setCircleSquares(new Set());
+        clearAnnotations();
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, []);
+  }, [clearAnnotations]);
 
   // Pending promotion square info for click-based pawn promotion
   const [pendingPromotion, setPendingPromotion] = useState<{ from: string; to: string } | null>(null);
@@ -213,6 +268,9 @@ export default function ChessBoard({
 
   const onSquareClick = useCallback(
     (square: Square) => {
+      // Left-click always clears annotations (circles + arrows)
+      clearAnnotations();
+
       if (status !== 'active') return;
       if (!onMakeMove && makeMoveMutation.isPending) return;
       if (allowedColor && chess.turn() !== allowedColor) return;
@@ -243,14 +301,13 @@ export default function ChessBoard({
         }
 
         dispatchMove(selectedSquare, square);
-        setCircleSquares(new Set()); // clear annotations on move
         setSelectedSquare(null);
       } else {
         const piece = chess.get(square);
         if (piece) setSelectedSquare(square);
       }
     },
-    [status, onMakeMove, selectedSquare, chess, makeMoveMutation, allowedColor, dispatchMove, setSelectedSquare],
+    [status, onMakeMove, selectedSquare, chess, makeMoveMutation, allowedColor, dispatchMove, setSelectedSquare, clearAnnotations],
   );
 
   const getResultMessage = () => {
@@ -277,9 +334,12 @@ export default function ChessBoard({
       }
     }
 
-    // Circle annotations from right-click (drawn on top)
+    // Circle annotations — donut ring, fully contained within the square (no edge bleed)
     for (const sq of circleSquares) {
-      styles[sq] = { ...styles[sq], boxShadow: `inset 0 0 0 4px ${annotationColor}` };
+      styles[sq] = {
+        ...styles[sq],
+        background: `radial-gradient(circle, transparent 56%, ${annotationColor}cc 56%, ${annotationColor}cc 83%, transparent 83%)`,
+      };
     }
 
     return styles;
@@ -307,7 +367,14 @@ export default function ChessBoard({
       )}
 
       {/* Chess Board */}
-      <div className="w-full max-w-[540px]">
+      <div
+        ref={boardContainerRef}
+        className="w-full max-w-[540px]"
+        onMouseDown={handleBoardMouseDown}
+        onMouseUp={handleBoardMouseUp}
+        onMouseLeave={() => { rightDragStart.current = null; }}
+        onContextMenu={(e) => e.preventDefault()}
+      >
         <Chessboard
           id="main-board"
           position={fen}
@@ -324,8 +391,8 @@ export default function ChessBoard({
           customDarkSquareStyle={{ backgroundColor: '#B58863' }}
           customLightSquareStyle={{ backgroundColor: '#F0D9B5' }}
           customSquareStyles={customSquareStyles}
-          onSquareRightClick={onSquareRightClick}
-          areArrowsAllowed={true}
+          areArrowsAllowed={false}
+          customArrows={managedArrows}
           customArrowColor={annotationColor}
           animationDuration={150}
         />
