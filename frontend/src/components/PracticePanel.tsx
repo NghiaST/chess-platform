@@ -27,7 +27,7 @@ export default function PracticePanel({ undoEnabled = false, onUndo }: PracticeP
           disabled={!undoEnabled}
           className="btn-secondary w-full disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Undo Last Move (coming soon)
+          Undo Last Move
         </button>
         <p className="text-xs text-gray-500">
           Current step only adds mode-specific UI. Gameplay rules are unchanged.

@@ -60,4 +60,17 @@ export class GameController {
       next(error);
     }
   }
+
+  async undoMove(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) return next(new AppError('Unauthorized', 401));
+      const game = await gameService.undoMove({
+        gameId: req.params.id,
+        userId: req.user.id,
+      });
+      res.json({ status: 'success', data: game });
+    } catch (error) {
+      next(error);
+    }
+  }
 }

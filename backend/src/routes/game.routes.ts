@@ -188,4 +188,38 @@ router.post(
   gameController.resign
 );
 
+/**
+ * @swagger
+ * /api/games/{id}/undo:
+ *   post:
+ *     summary: Undo the last move (practice mode only)
+ *     tags: [Games]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Move undone
+ *       400:
+ *         description: Cannot undo (not active, not practice mode, or no moves)
+ *       403:
+ *         description: Forbidden (player cannot undo)
+ *       401:
+ *         description: Unauthorized
+ */
+// POST /api/games/:id/undo — protected
+router.post(
+  '/:id/undo',
+  authenticate,
+  [param('id').isUUID().withMessage('Invalid game ID')],
+  validate,
+  gameController.undoMove
+);
+
 export default router;

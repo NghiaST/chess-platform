@@ -24,4 +24,7 @@ export const gameService = {
 
   resign: (gameId: string) =>
     api.post(`/games/${gameId}/resign`).then((r) => r.data.data),
+
+  undoMove: (gameId: string) =>
+    api.post(`/games/${gameId}/undo`).then((r) => r.data.data),
 };

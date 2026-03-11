@@ -69,6 +69,16 @@ export default function GamePage() {
     },
   });
 
+  // Undo move (practice mode only)
+  const undoMutation = useMutation({
+    mutationFn: () => gameService.undoMove(id!),
+    onSuccess: (data) => {
+      // Update local game state with the undone game
+      const apiMode = (data as { mode?: 'standard' | 'practice' | 'study' }).mode;
+      initGame(data.id, data.fen, data.isBotGame, data.botLevel ?? 5, myColor, apiMode ?? gameMode);
+    },
+  });
+
   const handleResign = () => {
     if (!window.confirm('Are you sure you want to resign?')) return;
     if (isBotGame) {
@@ -81,6 +91,10 @@ export default function GamePage() {
   const handleNewGame = () => {
     resetGame();
     navigate('/');
+  };
+
+  const handleUndo = () => {
+    undoMutation.mutate();
   };
 
   if (isLoading) {
@@ -197,7 +211,12 @@ export default function GamePage() {
             </div>
           </div>
 
-          {gameMode === 'practice' && <PracticePanel />}
+          {gameMode === 'practice' && (
+            <PracticePanel
+              undoEnabled={status === 'active' && moves.length > 0}
+              onUndo={handleUndo}
+            />
+          )}
 
           {/* Move History */}
           <MoveHistory moves={moves} />

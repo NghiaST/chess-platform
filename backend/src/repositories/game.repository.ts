@@ -142,4 +142,20 @@ export class GameRepository {
       }),
     ]) as Promise<[number, number, number]>;
   }
+
+  async deleteLastMove(gameId: string) {
+    // Get the move with the highest moveNumber for this game
+    const maxMove = await prisma.move.findFirst({
+      where: { gameId },
+      orderBy: { moveNumber: 'desc' },
+      select: { id: true },
+    });
+
+    if (!maxMove) return null;
+
+    // Delete that move by its id
+    return prisma.move.delete({
+      where: { id: maxMove.id },
+    });
+  }
 }

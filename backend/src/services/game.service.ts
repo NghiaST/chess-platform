@@ -258,4 +258,40 @@ export class GameService {
 
     return { game: updatedGame, ratingDelta };
   }
+
+  async undoMove({ gameId, userId }: { gameId: string; userId: string }) {
+    const game = await gameRepo.findById(gameId);
+    if (!game) throw new AppError('Game not found.', 404);
+    if (game.status !== GameStatus.ACTIVE) throw new AppError('Game is not active.', 400);
+    if (!game.isBotGame) throw new AppError('Undo is only available in bot games.', 400);
+    if ((game as any).mode !== 'practice') throw new AppError('Undo is only available in practice mode.', 400);
+    if (game.whitePlayerId !== userId) throw new AppError('Only the player can undo moves.', 403);
+    if (game.moves.length === 0) throw new AppError('No moves to undo.', 400);
+
+    // Delete the last move
+    await gameRepo.deleteLastMove(gameId);
+
+    // Replay remaining moves to get the correct FEN
+    const chess = new Chess();
+    for (const move of game.moves.slice(0, -1)) {
+      chess.move({
+        from: move.uci.slice(0, 2),
+        to: move.uci.slice(2, 4),
+        promotion: move.uci.length > 4 ? (move.uci[4] as 'q' | 'r' | 'b' | 'n') : undefined,
+      });
+    }
+
+    const newFen = chess.fen();
+
+    // Update game FEN
+    const updatedGame = await gameRepo.updateFenAndStatus({
+      gameId,
+      fen: newFen,
+      status: GameStatus.ACTIVE,
+      result: null,
+    });
+
+    return updatedGame;
+  }
 }
+
