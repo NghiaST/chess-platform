@@ -49,7 +49,10 @@ export class GameRepository {
         fen: true,
         createdAt: true,
         updatedAt: true,
-        moves: { orderBy: { moveNumber: 'asc' } },
+        moves: {
+          select: { id: true, gameId: true, moveNumber: true, san: true, uci: true, color: true, createdAt: true },
+          orderBy: { moveNumber: 'asc' },
+        },
         whitePlayer: { select: { id: true, username: true, rating: true } },
         blackPlayer: { select: { id: true, username: true, rating: true } },
       },
@@ -82,7 +85,10 @@ export class GameRepository {
         fen: true,
         createdAt: true,
         updatedAt: true,
-        moves: { orderBy: { moveNumber: 'asc' } },
+        moves: {
+          select: { id: true, gameId: true, moveNumber: true, san: true, uci: true, color: true, createdAt: true },
+          orderBy: { moveNumber: 'asc' },
+        },
       },
     });
   }
