@@ -106,9 +106,8 @@ export default function ChessBoard({
       setManagedArrows((prev) => {
         const exists = prev.some((a) => a[0] === start && a[1] === end);
         if (exists) return prev.filter((a) => !(a[0] === start && a[1] === end));
-        // Remove existing arrow to same destination to prevent shortening
-        const filtered = prev.filter((a) => a[1] !== end);
-        return [...filtered, [start, end, annotationColorRef.current]];
+        // Allow multiple arrows to share the same destination square.
+        return [...prev, [start, end, annotationColorRef.current]];
       });
     }
   }, [boardOrientation]);
@@ -338,7 +337,7 @@ export default function ChessBoard({
     for (const sq of circleSquares) {
       styles[sq] = {
         ...styles[sq],
-        background: `radial-gradient(circle, transparent 56%, ${annotationColor}cc 56%, ${annotationColor}cc 83%, transparent 83%)`,
+        background: `radial-gradient(circle, transparent 60%, ${annotationColor}cc 60%, ${annotationColor}cc 78%, transparent 78%)`,
       };
     }
 
