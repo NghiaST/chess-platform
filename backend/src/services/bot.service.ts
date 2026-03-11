@@ -1,3 +1,4 @@
+import { spawn } from 'child_process';
 import path from 'path';
 
 // Map botLevel (1-20) → Stockfish Skill Level (0-20) and search depth
@@ -24,46 +25,68 @@ const SKILL_MAP: Record<number, { skill: number; depth: number }> = {
   20: { skill: 20, depth: 20 },
 };
 
-// Resolved at runtime relative to compiled dist/services/ → project root/node_modules
-const STOCKFISH_PATH = path.join(__dirname, '../../node_modules/stockfish/bin/stockfish-18-asm.js');
+// stockfish-18-asm.js path: when run as `node stockfish-18-asm.js` (main module),
+// it reads UCI commands from stdin and writes responses to stdout.
+// We spawn it as a child process so it runs non-blocking in a separate OS process.
+const STOCKFISH_SCRIPT = path.join(__dirname, '../../node_modules/stockfish/bin/stockfish-18-asm.js');
 
 /**
  * Ask Stockfish for the best move given a FEN position and bot difficulty level.
  * Returns the best move in UCI notation (e.g. "e2e4", "e7e8q").
+ *
+ * Spawns stockfish-18-asm.js as a child process (stdin/stdout UCI),
+ * so the main Node.js event loop stays free while the engine calculates.
  */
 export function getBotMove(fen: string, botLevel: number): Promise<string> {
   const config = SKILL_MAP[botLevel] ?? SKILL_MAP[5];
 
   return new Promise((resolve, reject) => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const Stockfish = require(STOCKFISH_PATH) as (opts?: unknown) => ((cmd: string) => void) & { listener?: (msg: string) => void };
-    const sf = Stockfish();
+    const child = spawn(process.execPath, [STOCKFISH_SCRIPT], {
+      stdio: ['pipe', 'pipe', 'ignore'],
+    });
 
-    const timeoutId = setTimeout(() => {
-      try { sf('quit'); } catch { /* ignore */ }
-      reject(new Error(`Stockfish timeout for bot level ${botLevel}`));
-    }, 15000);
+    let buffer = '';
+    let settled = false;
 
-    sf.listener = (msg: string) => {
-      if (msg === 'readyok') {
-        sf(`position fen ${fen}`);
-        sf(`go depth ${config.depth}`);
-      } else {
-        const match = msg.match(/^bestmove (\S+)/);
-        if (match) {
-          clearTimeout(timeoutId);
-          const move = match[1];
-          if (move === '(none)') {
-            reject(new Error('Stockfish returned no legal move'));
-          } else {
-            resolve(move);
-          }
-        }
-      }
+    const finish = (err: Error | null, move?: string) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      try { child.kill('SIGKILL'); } catch { /* ignore */ }
+      if (err) reject(err);
+      else resolve(move!);
     };
 
-    sf(`setoption name Skill Level value ${config.skill}`);
-    sf('uci');
-    sf('isready');
+    const timeoutId = setTimeout(
+      () => finish(new Error(`Stockfish timeout (botLevel ${botLevel})`)),
+      15000,
+    );
+
+    child.stdout.on('data', (chunk: Buffer) => {
+      buffer += chunk.toString();
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        if (line.startsWith('bestmove ')) {
+          const move = line.split(' ')[1];
+          if (move && move !== '(none)') {
+            finish(null, move);
+          } else {
+            finish(new Error('Stockfish returned no valid move'));
+          }
+          return;
+        }
+      }
+    });
+
+    child.on('error', (err: Error) => finish(err));
+
+    // Send UCI commands via stdin — buffered until engine's readline is ready
+    child.stdin.write(`setoption name Skill Level value ${config.skill}\n`);
+    child.stdin.write('uci\n');
+    child.stdin.write('isready\n');
+    child.stdin.write(`position fen ${fen}\n`);
+    child.stdin.write(`go depth ${config.depth}\n`);
   });
 }
