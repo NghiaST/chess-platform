@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import ChessBoard from '@/components/ChessBoard';
@@ -10,7 +10,7 @@ import { gameService } from '@/services/game.service';
 export default function GamePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isAuthenticated, user } = useAuthStore();
+  const { isAuthenticated } = useAuthStore();
   const { gameId, status, result, moves, isBotGame, botLevel, initGame, setStatus, resetGame } =
     useGameStore();
 

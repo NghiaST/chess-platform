@@ -1,9 +1,8 @@
-import { useEffect, useCallback, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Chessboard } from 'react-chessboard';
 import { Square } from 'chess.js';
 import { useMutation } from '@tanstack/react-query';
 import { useGameStore } from '@/store/gameStore';
-import { useAuthStore } from '@/store/authStore';
 import { gameService } from '@/services/game.service';
 
 interface ChessBoardProps {
@@ -11,11 +10,9 @@ interface ChessBoardProps {
 }
 
 export default function ChessBoard({ gameId }: ChessBoardProps) {
-  const { user } = useAuthStore();
   const {
     fen,
     chess,
-    moves,
     status,
     result,
     applyMove,

@@ -21,7 +21,7 @@ interface GameState {
   // Actions
   initGame: (gameId: string, fen: string, isBotGame: boolean, botLevel: number) => void;
   applyMove: (move: Move, newFen: string) => void;
-  setStatus: (status: 'idle' | 'active' | 'finished', result?: string) => void;
+  setStatus: (status: 'idle' | 'active' | 'finished', result?: string | null) => void;
   setSelectedSquare: (square: Square | null) => void;
   resetGame: () => void;
 }
@@ -60,8 +60,8 @@ export const useGameStore = create<GameState>((set) => ({
       selectedSquare: null,
     })),
 
-  setStatus: (status, result = null) =>
-    set({ status, result }),
+  setStatus: (status, result = undefined) =>
+    set({ status, result: result ?? null }),
 
   setSelectedSquare: (square) =>
     set({ selectedSquare: square }),
