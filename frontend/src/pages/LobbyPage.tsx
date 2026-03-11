@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { useLobbyStore } from '@/store/lobbyStore';
@@ -10,15 +10,13 @@ export default function LobbyPage() {
   const { token, isAuthenticated } = useAuthStore();
   const { initGame } = useGameStore();
   const { status, setSearching, setMatched, reset } = useLobbyStore();
-  const listeningRef = useRef(false);
 
   useEffect(() => {
     if (!isAuthenticated) { navigate('/login'); return; }
   }, [isAuthenticated, navigate]);
 
   useEffect(() => {
-    if (!token || listeningRef.current) return;
-    listeningRef.current = true;
+    if (!token) return;
 
     const socket = connectSocket(token);
 
@@ -26,7 +24,6 @@ export default function LobbyPage() {
 
     const handleMatched = ({ gameId, color }: { gameId: string; color: 'white' | 'black' }) => {
       setMatched(gameId, color);
-      // Initialise game store so GamePage has everything it needs
       const initialFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
       initGame(gameId, initialFen, false, 0, color);
       navigate(`/game/${gameId}`);
@@ -40,11 +37,13 @@ export default function LobbyPage() {
     socket.on('queue:matched', handleMatched);
     socket.on('error', handleError);
 
-    // Emit queue join right away
     socket.emit('queue:join');
     setSearching();
 
     return () => {
+      // Tell server to remove us from queue (handles StrictMode double-invoke
+      // and real navigation-away cleanups correctly)
+      socket.emit('queue:leave');
       socket.off('queue:waiting', handleWaiting);
       socket.off('queue:matched', handleMatched);
       socket.off('error', handleError);

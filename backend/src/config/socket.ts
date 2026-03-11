@@ -309,3 +309,11 @@ export function getIO(): SocketIOServer {
   if (!io) throw new Error('Socket.IO not initialized. Call initSocket() first.');
   return io;
 }
+
+/**
+ * Clear the matchmaking queue.
+ * For use in tests only — do NOT call in production code.
+ */
+export function clearQueue(): void {
+  queue.clear();
+}
