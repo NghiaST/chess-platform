@@ -33,7 +33,7 @@ export default function GamePage() {
   }, [isAuthenticated, navigate]);
 
   // Load game data
-  const { data: game, isLoading, isError, refetch: refetchGame } = useQuery({
+  const { data: game, isLoading, isError } = useQuery({
     queryKey: ['game', id],
     queryFn: () => gameService.getGame(id!),
     enabled: !!id && isAuthenticated,
@@ -56,6 +56,7 @@ export default function GamePage() {
           san: move.san,
           uci: move.uci,
           color: move.color,
+          moveNumber: move.moveNumber,
         }));
         const { revertToFen } = useGameStore.getState();
         revertToFen(game.fen, reconstructedMoves);
@@ -90,14 +91,12 @@ export default function GamePage() {
         san: move.san,
         uci: move.uci,
         color: move.color,
+        moveNumber: move.moveNumber,
       }));
       
       // Use revertToFen to restore game state with moves
       const { revertToFen } = useGameStore.getState();
       revertToFen(data.fen, moves);
-      
-      // Refetch the game to ensure MoveHistory component gets updated moves
-      refetchGame();
     },
   });
 

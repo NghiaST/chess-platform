@@ -5,6 +5,7 @@ interface Move {
   san: string;
   uci: string;
   color: string;
+  moveNumber?: number;
 }
 
 interface GameState {
