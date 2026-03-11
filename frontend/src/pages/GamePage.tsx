@@ -12,7 +12,7 @@ import { gameService } from '@/services/game.service';
 export default function GamePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { isAuthenticated, user } = useAuthStore();
+  const { isAuthenticated, user, updateRating } = useAuthStore();
   const { gameId, status, result, moves, isBotGame, botLevel, myColor, ratingDelta, initGame, setStatus, setRatingDelta, resetGame } =
     useGameStore();
   const { myColor: lobbyColor, reset: resetLobby } = useLobbyStore();
@@ -60,7 +60,10 @@ export default function GamePage() {
     mutationFn: () => gameService.resign(id!),
     onSuccess: (data) => {
       setStatus('finished');
-      if (data?.ratingDelta != null) setRatingDelta(data.ratingDelta);
+      if (data?.ratingDelta != null) {
+        setRatingDelta(data.ratingDelta);
+        updateRating((user?.rating ?? 0) + data.ratingDelta);
+      }
     },
   });
 

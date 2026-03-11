@@ -25,7 +25,7 @@ interface GameEndedPayload {
 
 export function useMultiplayerGame(gameId: string | null, myColor: 'white' | 'black' | null) {
   const { applyMove, setStatus, setRatingDelta } = useGameStore();
-  const { token } = useAuthStore();
+  const { token, user, updateRating } = useAuthStore();
   const [opponentConnected, setOpponentConnected] = useState(false);
   const [opponentUsername, setOpponentUsername] = useState<string | null>(null);
   const joinedRef = useRef(false);
@@ -47,6 +47,7 @@ export function useMultiplayerGame(gameId: string | null, myColor: 'white' | 'bl
       setStatus('finished', payload.result);
       const delta = myColor === 'white' ? payload.whiteRatingDelta : payload.blackRatingDelta;
       setRatingDelta(delta);
+      updateRating((user?.rating ?? 0) + delta);
     };
 
     const handleOpponentConnected = ({ username }: { username: string }) => {

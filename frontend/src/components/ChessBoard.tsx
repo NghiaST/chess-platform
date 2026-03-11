@@ -3,6 +3,7 @@ import { Chess, Square } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 import { useMutation } from '@tanstack/react-query';
 import { useGameStore } from '@/store/gameStore';
+import { useAuthStore } from '@/store/authStore';
 import { gameService } from '@/services/game.service';
 
 // Mirrors react-chessboard's internal type (not re-exported from package root)
@@ -40,6 +41,7 @@ export default function ChessBoard({
     selectedSquare,
     setSelectedSquare,
   } = useGameStore();
+  const { user, updateRating } = useAuthStore();
 
   // Pending promotion square info for click-based pawn promotion
   const [pendingPromotion, setPendingPromotion] = useState<{ from: string; to: string } | null>(null);
@@ -89,7 +91,10 @@ export default function ChessBoard({
       }
       if (data.isGameOver) {
         setStatus('finished', data.result ?? undefined);
-        if (data.ratingDelta != null) setRatingDelta(data.ratingDelta);
+        if (data.ratingDelta != null) {
+          setRatingDelta(data.ratingDelta);
+          updateRating((user?.rating ?? 0) + data.ratingDelta);
+        }
       }
     },
 
