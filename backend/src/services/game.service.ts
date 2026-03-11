@@ -55,7 +55,7 @@ interface ResignDto {
 }
 
 export class GameService {
-  async createGame({ userId, isBotGame, botLevel }: CreateGameDto) {
+  async createGame({ userId, isBotGame, botLevel, mode = 'standard' }: CreateGameDto) {
     const user = await userRepo.findById(userId);
     if (!user) throw new AppError('User not found.', 404);
 
@@ -66,6 +66,7 @@ export class GameService {
       blackPlayerId: isBotGame ? null : null,
       isBotGame,
       botLevel: isBotGame ? botLevel : null,
+      mode,
       status: GameStatus.ACTIVE,
       fen: chess.fen(),
     });
@@ -180,9 +181,9 @@ export class GameService {
             result: botResult,
           });
 
-          // Apply ELO if the bot's move ended the game
+          // Apply ELO if the bot's move ended the game (not in practice mode)
           let ratingDelta: number | null = null;
-          if (botStatus === GameStatus.FINISHED && game.whitePlayer) {
+          if (botStatus === GameStatus.FINISHED && game.whitePlayer && game.mode !== 'practice') {
             ratingDelta = await applyBotGameElo(
               userId, gameId, game.whitePlayer.rating, game.botLevel ?? 5, botResult!
             );
@@ -211,9 +212,9 @@ export class GameService {
       }
     }
 
-    // Apply ELO if the player's own move ended a bot game
+    // Apply ELO if the player's own move ended a bot game (not in practice mode)
     let eloChange: number | null = null;
-    if (game.isBotGame && newStatus === GameStatus.FINISHED && game.whitePlayer) {
+    if (game.isBotGame && newStatus === GameStatus.FINISHED && game.whitePlayer && game.mode !== 'practice') {
       eloChange = await applyBotGameElo(
         userId, gameId, game.whitePlayer.rating, game.botLevel ?? 5, result!
       );
@@ -248,9 +249,9 @@ export class GameService {
       result,
     });
 
-    // Apply ELO for resigning in a bot game (human is always white)
+    // Apply ELO for resigning in a bot game (human is always white) — but not in practice mode
     let ratingDelta: number | null = null;
-    if (game.isBotGame && game.whitePlayer && isWhite) {
+    if (game.isBotGame && game.whitePlayer && isWhite && game.mode !== 'practice') {
       ratingDelta = await applyBotGameElo(
         userId, gameId, game.whitePlayer.rating, game.botLevel ?? 5, result
       );
@@ -264,15 +265,14 @@ export class GameService {
     if (!game) throw new AppError('Game not found.', 404);
     if (game.status !== GameStatus.ACTIVE) throw new AppError('Game is not active.', 400);
     if (!game.isBotGame) throw new AppError('Undo is only available in bot games.', 400);
-    const mode = (game as any).mode || 'standard';
-    if (mode !== 'practice' && mode !== 'study') throw new AppError('Undo is only available in practice or study mode.', 400);
+    if (game.mode !== 'practice' && game.mode !== 'study') throw new AppError('Undo is only available in practice or study mode.', 400);
     if (game.whitePlayerId !== userId) throw new AppError('Only the player can undo moves.', 403);
     if (game.moves.length === 0) throw new AppError('No moves to undo.', 400);
 
     // Determine how many moves to delete:
     // - Practice mode (PvE): delete 2 moves (player's move + bot's response)
     // - Study mode: delete 1 move
-    const movesToDelete = mode === 'practice' ? 2 : 1;
+    const movesToDelete = game.mode === 'practice' ? 2 : 1;
 
     if (game.moves.length < movesToDelete) {
       throw new AppError(`Cannot undo: need at least ${movesToDelete} move(s).`, 400);

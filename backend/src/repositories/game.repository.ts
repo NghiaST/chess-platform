@@ -13,6 +13,7 @@ interface CreateGameDto {
   blackPlayerId: string | null;
   isBotGame: boolean;
   botLevel: number | null;
+  mode?: 'standard' | 'practice' | 'study';
   status: GameStatus;
   fen: string;
 }

@@ -60,6 +60,7 @@ function defaultGame() {
     blackPlayerId: null as string | null,
     isBotGame: true,
     botLevel: 5,
+    mode: 'standard' as string,
     status: GameStatus.ACTIVE as GameStatus,
     result: null as GameResult | null,
     fen: INITIAL_FEN,
@@ -107,6 +108,7 @@ describe('GameService.createGame', () => {
         whitePlayerId: USER_ID,
         isBotGame: true,
         botLevel: 5,
+        mode: 'standard',
         status: GameStatus.ACTIVE,
       }),
     );
@@ -120,9 +122,9 @@ describe('GameService.createGame', () => {
     ).rejects.toMatchObject({ statusCode: 404 });
   });
 
-  it('accepts optional mode without affecting persistence behavior', async () => {
+  it('accepts optional mode and forwards it to repository', async () => {
     userRepoMock.findById.mockResolvedValue(mockUser);
-    const created = makeMockGame();
+    const created = makeMockGame({ mode: 'practice' });
     gameRepoMock.create.mockResolvedValue(created);
 
     await service.createGame({ userId: USER_ID, isBotGame: true, botLevel: 5, mode: 'practice' });
@@ -132,6 +134,7 @@ describe('GameService.createGame', () => {
         whitePlayerId: USER_ID,
         isBotGame: true,
         botLevel: 5,
+        mode: 'practice',
       }),
     );
   });

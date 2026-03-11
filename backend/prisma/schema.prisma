@@ -57,6 +57,7 @@ model Game {
   blackPlayerId String?
   isBotGame     Boolean     @default(false)
   botLevel      Int?
+  mode          String      @default("standard") // 'standard' | 'practice' | 'study'
   status        GameStatus  @default(ACTIVE)
   result        GameResult?
   fen           String      @db.Text

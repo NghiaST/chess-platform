@@ -69,13 +69,17 @@ export default function GamePage() {
     },
   });
 
-  // Undo move (practice mode only)
+  // Undo move (practice/study mode only)
   const undoMutation = useMutation({
     mutationFn: () => gameService.undoMove(id!),
     onSuccess: (data) => {
       // Update local game state with the undone game
       const apiMode = (data as { mode?: 'standard' | 'practice' | 'study' }).mode;
       initGame(data.id, data.fen, data.isBotGame, data.botLevel ?? 5, myColor, apiMode ?? gameMode);
+    },
+    onError: (error: any) => {
+      const message = error?.response?.data?.message || 'Failed to undo move';
+      console.error('Undo error:', message);
     },
   });
 
