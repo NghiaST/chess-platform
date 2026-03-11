@@ -21,6 +21,7 @@ interface GameState {
   // Actions
   initGame: (gameId: string, fen: string, isBotGame: boolean, botLevel: number) => void;
   applyMove: (move: Move, newFen: string) => void;
+  revertToFen: (previousFen: string, previousMoves: Move[]) => void;
   setStatus: (status: 'idle' | 'active' | 'finished', result?: string | null) => void;
   setSelectedSquare: (square: Square | null) => void;
   resetGame: () => void;
@@ -59,6 +60,9 @@ export const useGameStore = create<GameState>((set) => ({
       moves: [...state.moves, move],
       selectedSquare: null,
     })),
+
+  revertToFen: (previousFen, previousMoves) =>
+    set({ fen: previousFen, chess: new Chess(previousFen), moves: previousMoves, selectedSquare: null }),
 
   setStatus: (status, result = undefined) =>
     set({ status, result: result ?? null }),

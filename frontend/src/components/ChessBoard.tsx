@@ -1,9 +1,12 @@
 import { useCallback, useState } from 'react';
+import { Chess, Square } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
-import { Square } from 'chess.js';
 import { useMutation } from '@tanstack/react-query';
 import { useGameStore } from '@/store/gameStore';
 import { gameService } from '@/services/game.service';
+
+// Mirrors react-chessboard's internal type (not re-exported from package root)
+type PromotionPieceOption = 'wQ' | 'wR' | 'wN' | 'wB' | 'bQ' | 'bR' | 'bB' | 'bN';
 
 interface ChessBoardProps {
   gameId: string;
@@ -15,73 +18,168 @@ export default function ChessBoard({ gameId }: ChessBoardProps) {
     chess,
     status,
     result,
+    moves,
     applyMove,
+    revertToFen,
     setStatus,
     selectedSquare,
     setSelectedSquare,
   } = useGameStore();
 
   const [boardOrientation] = useState<'white' | 'black'>('white');
+  // Pending promotion square info for click-based pawn promotion
+  const [pendingPromotion, setPendingPromotion] = useState<{ from: string; to: string } | null>(null);
+
+  /**
+   * Optimistically apply the player's move to local state before the API returns.
+   * Uses chess.js to validate and compute the resulting FEN.
+   */
+  const applyMoveOptimistically = useCallback(
+    (from: string, to: string, promotion?: string): boolean => {
+      const tempChess = new Chess(chess.fen());
+      try {
+        const moveResult = tempChess.move({
+          from,
+          to,
+          promotion: promotion as 'q' | 'r' | 'b' | 'n' | undefined,
+        });
+        if (moveResult) {
+          applyMove(
+            { san: moveResult.san, uci: `${from}${to}${promotion ?? ''}`, color: moveResult.color },
+            tempChess.fen(),
+          );
+          return true;
+        }
+      } catch { /* invalid move — board stays unchanged */ }
+      return false;
+    },
+    [chess, applyMove],
+  );
 
   const makeMoveMutation = useMutation({
     mutationFn: (moveData: { from: string; to: string; promotion?: string }) =>
       gameService.makeMove(gameId, moveData),
+
+    // Capture pre-update state for rollback. Runs synchronously before the fetch starts;
+    // Zustand has already updated its store but React hasn't re-rendered, so `fen`/`moves`
+    // in this closure still hold the pre-optimistic-update values.
+    onMutate: () => ({ prevFen: fen, prevMoves: [...moves] }),
+
     onSuccess: (data) => {
-      // Apply the player's move
-      applyMove(
-        { san: data.move.san, uci: data.move.uci, color: chess.turn() === 'w' ? 'b' : 'w' },
-        data.move.fen
-      );
-      // Apply the bot's response move if present
+      // Player's move was already applied optimistically — only apply the bot's response.
       if (data.botMove) {
         applyMove(
           { san: data.botMove.san, uci: data.botMove.uci, color: 'b' },
-          data.botMove.fen
+          data.botMove.fen,
         );
       }
       if (data.isGameOver) {
         setStatus('finished', data.result ?? undefined);
       }
     },
+
+    onError: (_err, _variables, context) => {
+      // Roll back the optimistic board update
+      if (context) revertToFen(context.prevFen, context.prevMoves);
+    },
   });
 
+  /**
+   * react-chessboard calls this when a piece is dropped.
+   *
+   * For promotion moves: the library shows a promotion dialog first; onPieceDrop is called
+   * AFTER the user picks a piece, with `piece` set to the selected piece (e.g. 'wQ'), not 'wP'.
+   * We detect promotion by inspecting the source square via chess.js, and extract the chosen
+   * promotion type from the `piece` parameter.
+   */
   const onDrop = useCallback(
     (sourceSquare: string, targetSquare: string, piece: string): boolean => {
       if (status !== 'active') return false;
       if (makeMoveMutation.isPending) return false;
 
-      // Determine promotion
+      const movingPiece = chess.get(sourceSquare as Square);
       const isPromotion =
-        piece.toLowerCase().includes('p') &&
-        ((piece.includes('w') && targetSquare[1] === '8') ||
-          (piece.includes('b') && targetSquare[1] === '1'));
+        movingPiece?.type === 'p' &&
+        ((movingPiece.color === 'w' && targetSquare[1] === '8') ||
+          (movingPiece.color === 'b' && targetSquare[1] === '1'));
 
-      makeMoveMutation.mutate({
-        from: sourceSquare,
-        to: targetSquare,
-        promotion: isPromotion ? 'q' : undefined,
-      });
+      // piece[1] is the promotion type selected in the dialog: Q/R/B/N → q/r/b/n
+      const promotion = isPromotion ? piece[1].toLowerCase() : undefined;
 
+      if (!applyMoveOptimistically(sourceSquare, targetSquare, promotion)) return false;
+      makeMoveMutation.mutate({ from: sourceSquare, to: targetSquare, promotion });
       return true;
     },
-    [status, makeMoveMutation]
+    [status, makeMoveMutation, chess, applyMoveOptimistically],
+  );
+
+  /**
+   * Called when the user selects a piece in the promotion dialog.
+   *
+   * - Drag-based promotion: `fromSquare` is provided by the library → return true so the
+   *   library calls handleSetPosition, which then triggers onPieceDrop with the selected piece.
+   * - Click-based promotion (manually shown dialog): `fromSquare` is undefined → we apply the
+   *   move ourselves using `pendingPromotion` and return false to prevent the library from
+   *   calling handleSetPosition with a null source.
+   */
+  const onPromotionPieceSelect = useCallback(
+    (piece?: PromotionPieceOption, fromSquare?: Square, toSquare?: Square): boolean => {
+      if (!piece) {
+        setPendingPromotion(null);
+        return false;
+      }
+
+      // Click-based: library doesn't know the from-square, use our stored state
+      if (!fromSquare) {
+        const from = pendingPromotion?.from;
+        const to = (toSquare as string | undefined) ?? pendingPromotion?.to;
+        setPendingPromotion(null);
+        if (!from || !to || makeMoveMutation.isPending) return false;
+        const promotion = piece[1].toLowerCase();
+        if (applyMoveOptimistically(from, to, promotion)) {
+          makeMoveMutation.mutate({ from, to, promotion });
+        }
+        // Return false: prevents library calling handleSetPosition(null, toSquare, …)
+        return false;
+      }
+
+      // Drag-based: return true → library calls handleSetPosition → onPieceDrop fires
+      return true;
+    },
+    [pendingPromotion, makeMoveMutation, applyMoveOptimistically],
   );
 
   const onSquareClick = useCallback(
     (square: Square) => {
+      if (status !== 'active') return;
+      if (makeMoveMutation.isPending) return;
+
       if (selectedSquare) {
         if (selectedSquare !== square) {
-          makeMoveMutation.mutate({ from: selectedSquare, to: square });
+          const movingPiece = chess.get(selectedSquare);
+          const isPromotion =
+            movingPiece?.type === 'p' &&
+            ((movingPiece.color === 'w' && square[1] === '8') ||
+              (movingPiece.color === 'b' && square[1] === '1'));
+
+          if (isPromotion) {
+            // Show the promotion dialog via the controlled showPromotionDialog prop
+            setPendingPromotion({ from: selectedSquare, to: square });
+            setSelectedSquare(null);
+            return;
+          }
+
+          if (applyMoveOptimistically(selectedSquare, square)) {
+            makeMoveMutation.mutate({ from: selectedSquare, to: square });
+          }
         }
         setSelectedSquare(null);
       } else {
         const piece = chess.get(square);
-        if (piece) {
-          setSelectedSquare(square);
-        }
+        if (piece) setSelectedSquare(square);
       }
     },
-    [selectedSquare, chess, makeMoveMutation, setSelectedSquare]
+    [status, selectedSquare, chess, makeMoveMutation, applyMoveOptimistically, setSelectedSquare],
   );
 
   const getResultMessage = () => {
@@ -114,6 +212,9 @@ export default function ChessBoard({ gameId }: ChessBoardProps) {
           position={fen}
           onPieceDrop={onDrop}
           onSquareClick={onSquareClick}
+          onPromotionPieceSelect={onPromotionPieceSelect}
+          promotionToSquare={pendingPromotion?.to as Square | null ?? null}
+          showPromotionDialog={!!pendingPromotion}
           boardOrientation={boardOrientation}
           customBoardStyle={{
             borderRadius: '8px',
@@ -141,7 +242,7 @@ export default function ChessBoard({ gameId }: ChessBoardProps) {
           />
           <span>{chess.turn() === 'w' ? 'White' : 'Black'} to move</span>
           {makeMoveMutation.isPending && (
-            <span className="text-blue-400 animate-pulse">Processing...</span>
+            <span className="text-blue-400 animate-pulse">Waiting for bot...</span>
           )}
         </div>
       )}
