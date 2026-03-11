@@ -24,4 +24,24 @@ export class UserController {
       next(error);
     }
   }
+
+  async getRatingHistory(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const history = await userService.getRatingHistory(req.params.id);
+      res.json({ status: 'success', data: history });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getGameHistory(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+      const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string, 10) || 10));
+      const data = await userService.getGameHistory(req.params.id, page, limit);
+      res.json({ status: 'success', data });
+    } catch (error) {
+      next(error);
+    }
+  }
 }

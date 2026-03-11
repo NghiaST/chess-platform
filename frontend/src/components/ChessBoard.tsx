@@ -22,6 +22,7 @@ export default function ChessBoard({ gameId }: ChessBoardProps) {
     applyMove,
     revertToFen,
     setStatus,
+    setRatingDelta,
     selectedSquare,
     setSelectedSquare,
   } = useGameStore();
@@ -75,6 +76,7 @@ export default function ChessBoard({ gameId }: ChessBoardProps) {
       }
       if (data.isGameOver) {
         setStatus('finished', data.result ?? undefined);
+        if (data.ratingDelta != null) setRatingDelta(data.ratingDelta);
       }
     },
 

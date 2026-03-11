@@ -27,4 +27,18 @@ export class UserRepository {
   updateRating(id: string, rating: number) {
     return prisma.user.update({ where: { id }, data: { rating } });
   }
+
+  findRatingHistory(userId: string, take: number) {
+    return prisma.ratingHistory.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take,
+      select: {
+        ratingBefore: true,
+        ratingAfter: true,
+        createdAt: true,
+        gameId: true,
+      },
+    });
+  }
 }

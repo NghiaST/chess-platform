@@ -11,7 +11,7 @@ export default function GamePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuthStore();
-  const { gameId, status, result, moves, isBotGame, botLevel, initGame, setStatus, resetGame } =
+  const { gameId, status, result, moves, isBotGame, botLevel, ratingDelta, initGame, setStatus, setRatingDelta, resetGame } =
     useGameStore();
 
   // Redirect if not authenticated
@@ -38,8 +38,9 @@ export default function GamePage() {
 
   const resignMutation = useMutation({
     mutationFn: () => gameService.resign(id!),
-    onSuccess: () => {
+    onSuccess: (data) => {
       setStatus('finished');
+      if (data?.ratingDelta != null) setRatingDelta(data.ratingDelta);
     },
   });
 
@@ -84,6 +85,13 @@ export default function GamePage() {
           <p className="text-gray-400 text-sm mt-1">
             {status === 'active' ? 'Game in progress' : `Game over — ${result ?? 'Unknown result'}`}
           </p>
+          {status === 'finished' && ratingDelta !== null && (
+            <p className={`text-sm font-bold mt-1 ${
+              ratingDelta >= 0 ? 'text-green-400' : 'text-red-400'
+            }`}>
+              Rating: {ratingDelta >= 0 ? '+' : ''}{ratingDelta}
+            </p>
+          )}
         </div>
         <div className="flex gap-3">
           {status === 'active' && (

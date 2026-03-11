@@ -60,4 +60,10 @@ router.get('/me', authenticate, userController.getMe);
 // GET /api/users/:id — public
 router.get('/:id', userController.getUserById);
 
+// GET /api/users/:id/rating-history — public
+router.get('/:id/rating-history', userController.getRatingHistory);
+
+// GET /api/users/:id/games — public
+router.get('/:id/games', userController.getGameHistory);
+
 export default router;

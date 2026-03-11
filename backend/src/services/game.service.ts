@@ -4,9 +4,35 @@ import { GameRepository } from '../repositories/game.repository';
 import { UserRepository } from '../repositories/user.repository';
 import { AppError } from '../middlewares/errorHandler';
 import { getBotMove } from './bot.service';
+import { getBotRating, computeEloChange } from './elo.service';
 
 const gameRepo = new GameRepository();
 const userRepo = new UserRepository();
+
+/**
+ * Compute and persist an ELO change for the human player after a bot game ends.
+ * The human is always white in bot games.
+ * Returns the integer rating delta (positive = gain, negative = loss).
+ */
+async function applyBotGameElo(
+  userId: string,
+  gameId: string,
+  playerRating: number,
+  botLevel: number,
+  gameResult: GameResult,
+): Promise<number> {
+  const botRating = getBotRating(botLevel);
+  const score =
+    gameResult === GameResult.WHITE_WIN ? 1
+    : gameResult === GameResult.DRAW ? 0.5
+    : 0;
+  const { newRating, delta } = computeEloChange(playerRating, botRating, score);
+  await Promise.all([
+    userRepo.updateRating(userId, newRating),
+    gameRepo.createRatingHistory({ userId, gameId, ratingBefore: playerRating, ratingAfter: newRating }),
+  ]);
+  return delta;
+}
 
 interface CreateGameDto {
   userId: string;
@@ -153,6 +179,14 @@ export class GameService {
             result: botResult,
           });
 
+          // Apply ELO if the bot's move ended the game
+          let ratingDelta: number | null = null;
+          if (botStatus === GameStatus.FINISHED && game.whitePlayer) {
+            ratingDelta = await applyBotGameElo(
+              userId, gameId, game.whitePlayer.rating, game.botLevel ?? 5, botResult!
+            );
+          }
+
           return {
             game: finalGame,
             move: {
@@ -167,12 +201,21 @@ export class GameService {
             },
             isGameOver: botStatus === GameStatus.FINISHED,
             result: botResult ? String(botResult) : null,
+            ratingDelta,
           };
         }
       } catch (err) {
         // Bot move failed – log and return game state without bot move
         console.error('Bot move error:', err);
       }
+    }
+
+    // Apply ELO if the player's own move ended a bot game
+    let eloChange: number | null = null;
+    if (game.isBotGame && newStatus === GameStatus.FINISHED && game.whitePlayer) {
+      eloChange = await applyBotGameElo(
+        userId, gameId, game.whitePlayer.rating, game.botLevel ?? 5, result!
+      );
     }
 
     return {
@@ -185,6 +228,7 @@ export class GameService {
       botMove: null,
       isGameOver: newStatus === GameStatus.FINISHED,
       result: result ? String(result) : null,
+      ratingDelta: eloChange,
     };
   }
 
@@ -196,11 +240,21 @@ export class GameService {
     const isWhite = game.whitePlayerId === userId;
     const result = isWhite ? GameResult.BLACK_WIN : GameResult.WHITE_WIN;
 
-    return gameRepo.updateFenAndStatus({
+    const updatedGame = await gameRepo.updateFenAndStatus({
       gameId,
       fen: game.fen,
       status: GameStatus.FINISHED,
       result,
     });
+
+    // Apply ELO for resigning in a bot game (human is always white)
+    let ratingDelta: number | null = null;
+    if (game.isBotGame && game.whitePlayer && isWhite) {
+      ratingDelta = await applyBotGameElo(
+        userId, gameId, game.whitePlayer.rating, game.botLevel ?? 5, result
+      );
+    }
+
+    return { game: updatedGame, ratingDelta };
   }
 }

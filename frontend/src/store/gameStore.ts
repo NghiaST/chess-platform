@@ -17,6 +17,7 @@ interface GameState {
   isBotGame: boolean;
   botLevel: number;
   selectedSquare: Square | null;
+  ratingDelta: number | null;
 
   // Actions
   initGame: (gameId: string, fen: string, isBotGame: boolean, botLevel: number) => void;
@@ -24,6 +25,7 @@ interface GameState {
   revertToFen: (previousFen: string, previousMoves: Move[]) => void;
   setStatus: (status: 'idle' | 'active' | 'finished', result?: string | null) => void;
   setSelectedSquare: (square: Square | null) => void;
+  setRatingDelta: (delta: number | null) => void;
   resetGame: () => void;
 }
 
@@ -39,6 +41,7 @@ export const useGameStore = create<GameState>((set) => ({
   isBotGame: true,
   botLevel: 5,
   selectedSquare: null,
+  ratingDelta: null,
 
   initGame: (gameId, fen, isBotGame, botLevel) =>
     set({
@@ -70,6 +73,9 @@ export const useGameStore = create<GameState>((set) => ({
   setSelectedSquare: (square) =>
     set({ selectedSquare: square }),
 
+  setRatingDelta: (delta) =>
+    set({ ratingDelta: delta }),
+
   resetGame: () =>
     set({
       gameId: null,
@@ -78,6 +84,7 @@ export const useGameStore = create<GameState>((set) => ({
       moves: [],
       status: 'idle',
       result: null,
+      ratingDelta: null,
       selectedSquare: null,
     }),
 }));

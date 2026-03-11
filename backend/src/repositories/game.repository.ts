@@ -1,6 +1,13 @@
 import { GameStatus, GameResult } from '@prisma/client';
 import prisma from '../config/database';
 
+interface RatingHistoryDto {
+  userId: string;
+  gameId: string;
+  ratingBefore: number;
+  ratingAfter: number;
+}
+
 interface CreateGameDto {
   whitePlayerId: string;
   blackPlayerId: string | null;
@@ -68,5 +75,71 @@ export class GameRepository {
         blackPlayer: { select: { id: true, username: true, rating: true } },
       },
     });
+  }
+
+  createRatingHistory({ userId, gameId, ratingBefore, ratingAfter }: RatingHistoryDto) {
+    return prisma.ratingHistory.create({
+      data: { userId, gameId, ratingBefore, ratingAfter },
+    });
+  }
+
+  getUserGameHistory(userId: string, skip: number, take: number) {
+    return prisma.game.findMany({
+      where: {
+        status: GameStatus.FINISHED,
+        OR: [{ whitePlayerId: userId }, { blackPlayerId: userId }],
+      },
+      orderBy: { updatedAt: 'desc' },
+      skip,
+      take,
+      include: {
+        whitePlayer: { select: { id: true, username: true } },
+        blackPlayer: { select: { id: true, username: true } },
+        ratingHistory: {
+          where: { userId },
+          select: { ratingBefore: true, ratingAfter: true },
+        },
+        _count: { select: { moves: true } },
+      },
+    });
+  }
+
+  countUserGameHistory(userId: string) {
+    return prisma.game.count({
+      where: {
+        status: GameStatus.FINISHED,
+        OR: [{ whitePlayerId: userId }, { blackPlayerId: userId }],
+      },
+    });
+  }
+
+  getUserGameStats(userId: string): Promise<[number, number, number]> {
+    return prisma.$transaction([
+      prisma.game.count({
+        where: {
+          status: GameStatus.FINISHED,
+          OR: [
+            { whitePlayerId: userId, result: GameResult.WHITE_WIN },
+            { blackPlayerId: userId, result: GameResult.BLACK_WIN },
+          ],
+        },
+      }),
+      prisma.game.count({
+        where: {
+          status: GameStatus.FINISHED,
+          OR: [
+            { whitePlayerId: userId, result: GameResult.BLACK_WIN },
+            { blackPlayerId: userId, result: GameResult.WHITE_WIN },
+          ],
+        },
+      }),
+      prisma.game.count({
+        where: {
+          status: GameStatus.FINISHED,
+          result: GameResult.DRAW,
+          OR: [{ whitePlayerId: userId }, { blackPlayerId: userId }],
+        },
+      }),
+    ]) as Promise<[number, number, number]>;
   }
 }
