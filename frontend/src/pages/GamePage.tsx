@@ -13,7 +13,7 @@ export default function GamePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { isAuthenticated, user, updateRating } = useAuthStore();
-  const { gameId, status, result, moves, isBotGame, botLevel, myColor, ratingDelta, initGame, setStatus, setRatingDelta, resetGame } =
+  const { gameId, status, result, moves, isBotGame, botLevel, gameMode, myColor, ratingDelta, initGame, setStatus, setRatingDelta, resetGame } =
     useGameStore();
   const { myColor: lobbyColor, reset: resetLobby } = useLobbyStore();
 
@@ -46,14 +46,15 @@ export default function GamePage() {
       if (!game.isBotGame && user) {
         color = game.whitePlayerId === user.id ? 'white' : 'black';
       }
-      initGame(game.id, game.fen, game.isBotGame, game.botLevel ?? 5, color);
+      const apiMode = (game as { mode?: 'standard' | 'practice' | 'study' }).mode;
+      initGame(game.id, game.fen, game.isBotGame, game.botLevel ?? 5, color, apiMode ?? gameMode);
       if (game.status !== 'ACTIVE') {
         setStatus('finished', game.result ?? undefined);
       }
     }
     // After first init from lobby, clear the lobby state
     if (game && lobbyColor) resetLobby();
-  }, [game, gameId, user, lobbyColor, initGame, setStatus, resetLobby]);
+  }, [game, gameId, user, lobbyColor, initGame, setStatus, resetLobby, gameMode]);
 
   // Bot resign via REST; multiplayer resign via socket
   const resignMutation = useMutation({
@@ -114,6 +115,11 @@ export default function GamePage() {
           <p className="text-gray-400 text-sm mt-1">
             {status === 'active' ? 'Game in progress' : `Game over — ${result ?? 'Unknown result'}`}
           </p>
+          {gameMode !== 'standard' && (
+            <p className="text-xs mt-1 text-blue-300">
+              Mode: {gameMode === 'practice' ? 'Practice (beta)' : 'Study (beta)'}
+            </p>
+          )}
           {!isBotGame && status === 'active' && (
             <p className={`text-xs mt-1 ${opponentConnected ? 'text-green-400' : 'text-yellow-400 animate-pulse'}`}>
               {opponentConnected

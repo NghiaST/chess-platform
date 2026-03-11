@@ -3,6 +3,7 @@ import api from './api';
 export interface CreateGameDto {
   isBotGame: boolean;
   botLevel?: number;
+  mode?: 'standard' | 'practice' | 'study';
 }
 
 export interface MakeMoveDto {

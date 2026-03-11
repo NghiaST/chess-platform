@@ -9,11 +9,12 @@ export class GameController {
   async createGame(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       if (!req.user) return next(new AppError('Unauthorized', 401));
-      const { isBotGame, botLevel } = req.body;
+      const { isBotGame, botLevel, mode } = req.body;
       const game = await gameService.createGame({
         userId: req.user.id,
         isBotGame,
         botLevel: botLevel ?? 5,
+        ...(mode ? { mode } : {}),
       });
       res.status(201).json({ status: 'success', data: game });
     } catch (error) {

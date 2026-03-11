@@ -73,6 +73,23 @@ describe('POST /api/games/create', () => {
     });
   });
 
+  it('forwards optional mode when provided', async () => {
+    gameSvcMock.createGame.mockResolvedValue(baseGame as any);
+
+    const res = await request(app)
+      .post('/api/games/create')
+      .set('Authorization', `Bearer ${makeToken()}`)
+      .send({ isBotGame: true, botLevel: 5, mode: 'practice' });
+
+    expect(res.status).toBe(201);
+    expect(gameSvcMock.createGame).toHaveBeenCalledWith({
+      userId: TEST_USER.id,
+      isBotGame: true,
+      botLevel: 5,
+      mode: 'practice',
+    });
+  });
+
   it('returns 400 when isBotGame is missing', async () => {
     const res = await request(app)
       .post('/api/games/create')
@@ -87,6 +104,15 @@ describe('POST /api/games/create', () => {
       .post('/api/games/create')
       .set('Authorization', `Bearer ${makeToken()}`)
       .send({ isBotGame: true, botLevel: 99 });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when mode is invalid', async () => {
+    const res = await request(app)
+      .post('/api/games/create')
+      .set('Authorization', `Bearer ${makeToken()}`)
+      .send({ isBotGame: true, botLevel: 5, mode: 'arcade' });
 
     expect(res.status).toBe(400);
   });

@@ -58,6 +58,10 @@ router.post(
       .optional()
       .isInt({ min: 1, max: 20 })
       .withMessage('botLevel must be 1-20'),
+    body('mode')
+      .optional()
+      .isIn(['standard', 'practice', 'study'])
+      .withMessage('mode must be one of: standard, practice, study'),
   ],
   validate,
   gameController.createGame

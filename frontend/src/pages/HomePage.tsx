@@ -9,7 +9,7 @@ type GameMode = 'standard' | 'practice' | 'study';
 
 const MODES: { id: GameMode; label: string; description: string; comingSoon?: true }[] = [
   { id: 'standard', label: '♟ Standard', description: 'Rated game, ELO updates after match.' },
-  { id: 'practice', label: '🎯 Practice', description: 'Hints, undo moves, no rating change.', comingSoon: true },
+  { id: 'practice', label: '🎯 Practice', description: 'Practice interface (beta), gameplay unchanged for now.' },
   { id: 'study',    label: '🔬 Study',    description: 'Play both sides and analyse lines.',  comingSoon: true },
 ];
 
@@ -20,10 +20,10 @@ export default function HomePage() {
   const [selectedMode, setSelectedMode] = useState<GameMode>('standard');
 
   const createGameMutation = useMutation({
-    mutationFn: (botLevel: number) =>
-      gameService.createGame({ isBotGame: true, botLevel }),
+    mutationFn: ({ botLevel, mode }: { botLevel: number; mode: GameMode }) =>
+      gameService.createGame({ isBotGame: true, botLevel, mode }),
     onSuccess: (game) => {
-      initGame(game.id, game.fen, true, game.botLevel ?? 5);
+      initGame(game.id, game.fen, true, game.botLevel ?? 5, null, selectedMode);
       navigate(`/game/${game.id}`);
     },
   });
@@ -33,7 +33,7 @@ export default function HomePage() {
       navigate('/login');
       return;
     }
-    createGameMutation.mutate(level);
+    createGameMutation.mutate({ botLevel: level, mode: selectedMode });
   };
 
   const BOT_LEVELS = [

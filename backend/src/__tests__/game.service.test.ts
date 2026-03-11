@@ -119,6 +119,22 @@ describe('GameService.createGame', () => {
       service.createGame({ userId: 'unknown', isBotGame: true, botLevel: 5 }),
     ).rejects.toMatchObject({ statusCode: 404 });
   });
+
+  it('accepts optional mode without affecting persistence behavior', async () => {
+    userRepoMock.findById.mockResolvedValue(mockUser);
+    const created = makeMockGame();
+    gameRepoMock.create.mockResolvedValue(created);
+
+    await service.createGame({ userId: USER_ID, isBotGame: true, botLevel: 5, mode: 'practice' });
+
+    expect(gameRepoMock.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        whitePlayerId: USER_ID,
+        isBotGame: true,
+        botLevel: 5,
+      }),
+    );
+  });
 });
 
 // ── getGameById ────────────────────────────────────────────────────────────────

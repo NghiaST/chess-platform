@@ -38,6 +38,7 @@ interface CreateGameDto {
   userId: string;
   isBotGame: boolean;
   botLevel: number;
+  mode?: 'standard' | 'practice' | 'study';
 }
 
 interface MakeMoveDto {
