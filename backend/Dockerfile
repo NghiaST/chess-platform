@@ -4,6 +4,8 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 COPY package*.json ./
+# Copy prisma schema before npm ci so postinstall (prisma generate) can run
+COPY prisma ./prisma/
 RUN npm ci
 
 COPY tsconfig.json ./
@@ -16,17 +18,17 @@ FROM node:20-alpine AS production
 
 WORKDIR /app
 
-# Install only production deps
+# Install production deps only, skip postinstall (prisma generate)
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev --ignore-scripts
 
 # Copy compiled output
 COPY --from=builder /app/dist ./dist
 
-# Copy Prisma schema (needed for prisma client)
+# Copy Prisma schema + generated client from builder
 COPY prisma ./prisma/
-
-RUN npx prisma generate
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
 
 # Create logs directory
 RUN mkdir -p logs
