@@ -20,8 +20,4 @@
       ]
     }
   ],
-  "env": {
-    "VITE_API_URL": "@chess_api_url",
-    "VITE_SOCKET_URL": "@chess_socket_url"
-  }
 }
