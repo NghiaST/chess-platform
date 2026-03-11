@@ -176,7 +176,7 @@ export default function ChessBoard({
         });
         if (moveResult) {
           applyMove(
-            { san: moveResult.san, uci: `${from}${to}${promotion ?? ''}`, color: moveResult.color },
+              { san: moveResult.san, uci: `${from}${to}${promotion ?? ''}`, color: moveResult.color, moveNumber: tempChess.history().length },
             tempChess.fen(),
           );
           return true;
