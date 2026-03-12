@@ -1,7 +1,10 @@
 import { useEffect } from 'react';
-import { Outlet, Link, useNavigate } from 'react-router-dom';
+import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { useSettingsStore } from '@/store/settingsStore';
+import { useActiveGameStore } from '@/store/activeGameStore';
+import { getSocket } from '@/services/socket.service';
+import RejoinBanner from './RejoinBanner';
 
 const BG_COLORS: Record<string, string> = {
   default: '',
@@ -12,7 +15,23 @@ const BG_COLORS: Record<string, string> = {
 export default function Layout() {
   const { isAuthenticated, user, logout } = useAuthStore();
   const { backgroundTheme } = useSettingsStore();
+  const { gameId: activeGameId, clearActive } = useActiveGameStore();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Auto-clear the active-game entry when the game ends
+  // (fires even while the user is on a different page)
+  useEffect(() => {
+    if (!activeGameId) return;
+    const socket = getSocket();
+    const handleEnded = () => clearActive();
+    socket.on('game:ended', handleEnded);
+    return () => { socket.off('game:ended', handleEnded); };
+  }, [activeGameId, clearActive]);
+
+  // Show the rejoin banner when there is an active game and we are NOT on that game page
+  const onGamePage = location.pathname === `/game/${activeGameId}`;
+  const showRejoin = !!activeGameId && !onGamePage;
 
   // Apply background theme to the page body
   useEffect(() => {
@@ -76,6 +95,9 @@ export default function Layout() {
           </div>
         </div>
       </nav>
+
+      {/* Rejoin banner — visible on every page except the active game itself */}
+      {showRejoin && <RejoinBanner />}
 
       {/* Page Content */}
       <main className="flex-1">

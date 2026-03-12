@@ -3,12 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { useLobbyStore } from '@/store/lobbyStore';
 import { useGameStore } from '@/store/gameStore';
+import { useActiveGameStore } from '@/store/activeGameStore';
 import { connectSocket, getSocket } from '@/services/socket.service';
 
 export default function LobbyPage() {
   const navigate = useNavigate();
   const { token, isAuthenticated } = useAuthStore();
   const { initGame } = useGameStore();
+  const { setActive: setActiveGame } = useActiveGameStore();
   const { status, setSearching, setMatched, reset } = useLobbyStore();
 
   useEffect(() => {
@@ -26,6 +28,7 @@ export default function LobbyPage() {
       setMatched(gameId, color);
       const initialFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
       initGame(gameId, initialFen, false, 0, color);
+      setActiveGame(gameId, color);
       navigate(`/game/${gameId}`);
     };
 
