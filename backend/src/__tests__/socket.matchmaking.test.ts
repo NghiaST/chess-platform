@@ -17,7 +17,7 @@ import jwt from 'jsonwebtoken';
 import { GameStatus, GameResult } from '@prisma/client';
 import { GameRepository } from '../repositories/game.repository';
 import { UserRepository } from '../repositories/user.repository';
-import { initSocket, getIO, clearQueue } from '../config/socket';
+import { initSocket, getIO, clearQueue, clearClocks } from '../config/socket';
 
 // ── Mock repo references ───────────────────────────────────────────────────────
 
@@ -64,6 +64,8 @@ afterEach(async () => {
   for (const s of openClients) { s.removeAllListeners(); s.close(); }
   openClients = [];
   clearQueue();
+  // Cancel any in-flight clock timeouts so they don't leak into other tests
+  clearClocks();
 });
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -472,5 +474,111 @@ describe('Game: resign', () => {
 
     const err = await errorPromise;
     expect(err.message).toMatch(/not a player/i);
+  });
+});
+
+// ── PvP Chess Clock ────────────────────────────────────────────────────────────
+describe('PvP chess clock', () => {
+  interface ClockEvent {
+    whiteMs: number;
+    blackMs: number;
+    activeColor: 'w' | 'b' | null;
+    serverTs: number;
+  }
+
+  /**
+   * Run full matchmaking flow + both players join the room.
+   * Returns the clock:state snapshots received on join plus the sockets.
+   */
+  async function matchAndJoin() {
+    gameRepoMock.create.mockResolvedValue(makeMockGame() as never);
+    gameRepoMock.findById.mockResolvedValue(makeMockGame() as never);
+
+    const [alice, bob] = await Promise.all([connectAs(ALICE), connectAs(BOB)]);
+
+    const aliceMatched = waitForEvent<{ gameId: string }>(alice, 'queue:matched');
+    const bobMatched   = waitForEvent<{ gameId: string }>(bob,   'queue:matched');
+    alice.emit('queue:join');
+    bob.emit('queue:join');
+    await Promise.all([aliceMatched, bobMatched]);
+
+    // Register clock listeners BEFORE emitting game:join
+    const aliceClock = waitForEvent<ClockEvent>(alice, 'clock:state');
+    const bobClock   = waitForEvent<ClockEvent>(bob,   'clock:state');
+    alice.emit('game:join', { gameId: GAME_ID });
+    bob.emit('game:join',   { gameId: GAME_ID });
+    const [ac, bc] = await Promise.all([aliceClock, bobClock]);
+    return { alice, bob, aliceClock: ac, bobClock: bc };
+  }
+
+  it('emits clock:state to each player when they join — both clocks at 10 min, white active', async () => {
+    const { aliceClock, bobClock } = await matchAndJoin();
+
+    // White clock has been ticking since match creation; allow up to 2s elapsed
+    expect(aliceClock.whiteMs).toBeLessThanOrEqual(10 * 60 * 1000);
+    expect(aliceClock.whiteMs).toBeGreaterThan(10 * 60 * 1000 - 2_000);
+    // Black clock hasn't started yet — still full
+    expect(aliceClock.blackMs).toBe(10 * 60 * 1000);
+    expect(aliceClock.activeColor).toBe('w');
+    expect(typeof aliceClock.serverTs).toBe('number');
+
+    expect(bobClock.activeColor).toBe('w');
+  });
+
+  it('switches the active clock to black after white makes a move', async () => {
+    gameRepoMock.addMove.mockResolvedValue({} as never);
+    gameRepoMock.updateFenAndStatus.mockResolvedValue(makeMockGame() as never);
+
+    const { alice, bob } = await matchAndJoin();
+
+    const aliceClockAfterMove = waitForEvent<ClockEvent>(alice, 'clock:state');
+    const bobClockAfterMove   = waitForEvent<ClockEvent>(bob,   'clock:state');
+
+    // Alice is white; plays e4
+    alice.emit('game:move', { gameId: GAME_ID, from: 'e2', to: 'e4' });
+
+    const [ac, bc] = await Promise.all([aliceClockAfterMove, bobClockAfterMove]);
+    expect(ac.activeColor).toBe('b');
+    expect(bc.activeColor).toBe('b');
+    // White's remaining time should be ≤ initial (some ms elapsed)
+    expect(ac.whiteMs).toBeLessThanOrEqual(10 * 60 * 1000);
+    // Black's time is untouched
+    expect(ac.blackMs).toBe(10 * 60 * 1000);
+  });
+
+  it('does not emit clock:timeout when the game ends by resign (clock is cancelled)', async () => {
+    const { alice } = await matchAndJoin();
+
+    // Mock the resign path
+    gameRepoMock.updateFenAndStatus.mockResolvedValue(
+      makeMockGame({ status: GameStatus.FINISHED, result: GameResult.BLACK_WIN }) as never,
+    );
+    userRepoMock.findById
+      .mockResolvedValueOnce({ id: ALICE.id, rating: 1200 } as never)
+      .mockResolvedValueOnce({ id: BOB.id,   rating: 1200 } as never);
+
+    let timeoutFired = false;
+    alice.on('clock:timeout', () => { timeoutFired = true; });
+
+    const ended = waitForEvent(alice, 'game:ended');
+    alice.emit('game:resign', { gameId: GAME_ID });
+    await ended;
+
+    // Wait a tick to ensure no spurious events arrive
+    await new Promise((r) => setTimeout(r, 50));
+    expect(timeoutFired).toBe(false);
+  });
+
+  it('sends clock:state snapshot to a reconnecting player (game:join on existing game)', async () => {
+    // Set up an existing active game whose clock is already running (via matchmaking)
+    const { alice } = await matchAndJoin();
+
+    // Alice "reconnects" by re-joining the game room
+    const clockOnReconnect = waitForEvent<ClockEvent>(alice, 'clock:state');
+    alice.emit('game:join', { gameId: GAME_ID });
+
+    const snapshot = await clockOnReconnect;
+    expect(snapshot.whiteMs).toBeLessThanOrEqual(10 * 60 * 1000);
+    expect(snapshot.activeColor).toBe('w');
   });
 });

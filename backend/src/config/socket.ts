@@ -440,3 +440,14 @@ export function getIO(): SocketIOServer {
 export function clearQueue(): void {
   queue.clear();
 }
+
+/**
+ * Clear all in-memory clock entries and cancel their pending timeouts.
+ * For use in tests only — prevents setTimeout leaks across test cases.
+ */
+export function clearClocks(): void {
+  clocks.forEach((entry) => {
+    if (entry.timeoutHandle) clearTimeout(entry.timeoutHandle);
+  });
+  clocks.clear();
+}
