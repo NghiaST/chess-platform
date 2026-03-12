@@ -10,18 +10,29 @@ A full-stack chess web application built with React, Node.js, and PostgreSQL.
 | State | Zustand, React Query |
 | Chess | chess.js, react-chessboard |
 | Backend | Node.js, Express, TypeScript |
-| Realtime | Socket.IO (ready for Phase 5) |
+| Realtime | Socket.IO |
 | Database | PostgreSQL, Prisma ORM |
 | DevOps | Docker, Docker Compose |
+
+## Features
+
+- **Play vs Bot** — single-player against Stockfish-powered bot
+- **Real-time PvP** — matchmaking queue, Socket.IO, 10-minute time control per side
+- **Disconnect grace** — 30-second reconnect window before forfeit; rejoin banner on home page
+- **Game History & Replay** — step through past games with Stockfish analysis, copy PGN/FEN
+- **Study Mode** — play both colors, load FEN/PGN, undo/redo, click-to-jump, export PGN/FEN
+- **ELO Rating & Leaderboard** — rating updates after each game
+- **Auth** — register/login with email or username + JWT
+- **Settings** — board theme, piece set, move highlights, premove toggle (persisted)
 
 ## Project Structure
 
 ```
 chess-platform/
-├── frontend/          # React + Vite frontend
-├── backend/           # Express + TypeScript API
+├── frontend/          # React + Vite SPA
+├── backend/           # Express + TypeScript API + Socket.IO
 ├── database/prisma/   # Prisma schema
-├── docker/            # Docker Compose
+├── docker/            # Docker Compose for local dev
 └── README.md
 ```
 
@@ -30,85 +41,85 @@ chess-platform/
 ### Prerequisites
 - Node.js 20+
 - Docker Desktop
-- Git
 
-### 1. Clone & Install
+### 1. Install dependencies
 
 ```bash
-git clone <repo-url>
-cd chess-platform
-
-# Install backend deps
 cd backend && npm install
-
-# Install frontend deps  
 cd ../frontend && npm install
 ```
 
-### 2. Start Database (Docker)
+### 2. Start database
 
 ```bash
 cd docker
 docker compose up postgres -d
 ```
 
-### 3. Setup Database Schema
+### 3. Run migrations
 
 ```bash
 cd backend
-# Copy prisma schema
 cp ../database/prisma/schema.prisma ./prisma/schema.prisma
-
-# Run migrations
 npx prisma migrate dev --name init
-
-# Generate Prisma client
 npx prisma generate
 ```
 
-### 4. Start Backend
+### 4. Configure environment
 
 ```bash
-cd backend
-npm run dev
-# API running at http://localhost:4000
+# backend/.env — copy from backend/.env.example
+cp backend/.env.example backend/.env
 ```
 
-### 5. Start Frontend
+### 5. Start dev servers
 
 ```bash
-cd frontend
-npm run dev
-# App running at http://localhost:5173
+# Terminal 1
+cd backend && npm run dev    # http://localhost:4000
+
+# Terminal 2
+cd frontend && npm run dev   # http://localhost:5173
 ```
 
 ## API Endpoints
 
 | Method | Path | Description |
 |---|---|---|
-| POST | /api/auth/register | Register user |
-| POST | /api/auth/login | Login |
-| GET | /api/users/me | Get current user |
-| GET | /api/users/:id | Get user by ID |
-| POST | /api/games/create | Create game |
-| GET | /api/games/:id | Get game by ID |
-| POST | /api/games/:id/move | Make a move |
-| POST | /api/games/:id/resign | Resign game |
+| POST | /api/auth/register | Register |
+| POST | /api/auth/login | Login (email or username) |
+| GET | /api/users/me | Current user |
+| GET | /api/users/:id | User profile |
+| GET | /api/games/:id | Game by ID |
+| POST | /api/games/:id/resign | Resign |
 | GET | /api/leaderboard | Top players |
+| POST | /api/analysis | Stockfish position analysis |
 
-## Feature Roadmap
+## Socket.IO Events
 
-- [x] Phase 1 — Chess game vs bot
-- [x] Phase 2 — Auth (register/login/JWT)
-- [ ] Phase 3 — Game history & replay
-- [ ] Phase 4 — ELO rating & leaderboard
-- [ ] Phase 5 — Real-time multiplayer (Socket.IO)
+| Event | Direction | Description |
+|---|---|---|
+| `queue:join` / `queue:leave` | client→server | Enter/leave matchmaking |
+| `queue:matched` | server→client | Match found |
+| `game:join` | client→server | Join game room |
+| `game:move` | client→server | Submit a move |
+| `game:state` | server→client | Full game state |
+| `game:ended` | server→client | Game over |
+| `clock:state` | server→client | Clock sync |
+| `clock:timeout` | server→client | Flag falls |
+| `player:disconnected` | server→client | Opponent left (with deadline) |
+| `player:reconnected` | server→client | Opponent rejoined |
 
-## Docker (Full Stack)
+## Tests
 
 ```bash
-cd docker
-docker compose up --build
+cd backend && npm test    # Jest — 94 tests
+cd frontend && npm test   # Vitest — 16 tests
 ```
 
-Access at http://localhost:5173
+## Docker (full stack)
+
+```bash
+cd docker && docker compose up --build
+# App at http://localhost:5173
+```
