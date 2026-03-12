@@ -1,9 +1,24 @@
+import { useEffect } from 'react';
 import { Outlet, Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
+import { useSettingsStore } from '@/store/settingsStore';
+
+const BG_COLORS: Record<string, string> = {
+  default: '',
+  linen: '#1c1917',   // stone-900 – warm tinted dark
+  slate: '#0f172a',   // slate-900 – cool blue-tinted dark
+};
 
 export default function Layout() {
   const { isAuthenticated, user, logout } = useAuthStore();
+  const { backgroundTheme } = useSettingsStore();
   const navigate = useNavigate();
+
+  // Apply background theme to the page body
+  useEffect(() => {
+    document.body.style.backgroundColor = BG_COLORS[backgroundTheme] ?? '';
+    return () => { document.body.style.backgroundColor = ''; };
+  }, [backgroundTheme]);
 
   const handleLogout = () => {
     logout();

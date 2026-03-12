@@ -5,9 +5,15 @@ import type { Arrow } from 'react-chessboard/dist/chessboard/types';
 import { useMutation } from '@tanstack/react-query';
 import { useGameStore } from '@/store/gameStore';
 import { useAuthStore } from '@/store/authStore';
-import { useSettingsStore } from '@/store/settingsStore';
+import { useSettingsStore, type BoardTheme } from '@/store/settingsStore';
 import { gameService } from '@/services/game.service';
 import { getLegalMoveSquares, isOwnPiece } from '@/utils/chessHelpers';
+
+const BOARD_SQUARE_COLORS: Record<BoardTheme, { dark: string; light: string }> = {
+  classic: { dark: '#B58863', light: '#F0D9B5' },
+  green:   { dark: '#769656', light: '#EEEED2' },
+  blue:    { dark: '#4B7399', light: '#DEE3E6' },
+};
 
 // Mirrors react-chessboard's internal type (not re-exported from package root)
 type PromotionPieceOption = 'wQ' | 'wR' | 'wN' | 'wB' | 'bQ' | 'bR' | 'bB' | 'bN';
@@ -82,7 +88,8 @@ export default function ChessBoard({
     analysisArrows,
   } = useGameStore();
   const { user, updateRating } = useAuthStore();
-  const { showLegalMoves, annotationColor } = useSettingsStore();
+  const { showLegalMoves, annotationColor, boardTheme } = useSettingsStore();
+  const { dark: darkSquare, light: lightSquare } = BOARD_SQUARE_COLORS[boardTheme];
 
   // Annotation state: circles (right-click single square) + arrows (right-click drag)
   const [circleSquares, setCircleSquares] = useState<Set<Square>>(new Set());
@@ -464,8 +471,8 @@ export default function ChessBoard({
             borderRadius: '8px',
             boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
           }}
-          customDarkSquareStyle={{ backgroundColor: '#B58863' }}
-          customLightSquareStyle={{ backgroundColor: '#F0D9B5' }}
+          customDarkSquareStyle={{ backgroundColor: darkSquare }}
+          customLightSquareStyle={{ backgroundColor: lightSquare }}
           customSquareStyles={customSquareStyles}
           areArrowsAllowed={false}
           animationDuration={150}
