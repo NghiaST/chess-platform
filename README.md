@@ -2,6 +2,14 @@
 
 A full-stack chess web application built with React, Node.js, and PostgreSQL.
 
+## Live Demo
+
+| | URL |
+|---|---|
+| **Frontend** | https://chess-platform-gold.vercel.app |
+| **Backend API** | https://chess-platform-yeq5.onrender.com |
+| **Database** | Neon (PostgreSQL serverless) |
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -12,7 +20,8 @@ A full-stack chess web application built with React, Node.js, and PostgreSQL.
 | Backend | Node.js, Express, TypeScript |
 | Realtime | Socket.IO |
 | Database | PostgreSQL, Prisma ORM |
-| DevOps | Docker, Docker Compose |
+| Hosting | Vercel (frontend), Render (backend), Neon (database) |
+| DevOps | Docker, Docker Compose (local dev) |
 
 ## Features
 
