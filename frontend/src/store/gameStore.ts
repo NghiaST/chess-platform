@@ -208,17 +208,29 @@ export const useGameStore = create<GameState>((set) => ({
     const chess = new Chess();
     chess.loadPgn(pgn); // throws if invalid
     const history = chess.history({ verbose: true });
-    const moves: Move[] = history.map((m, i) => ({
-      san: m.san,
-      uci: `${m.from}${m.to}${m.promotion ?? ''}`,
-      color: m.color,
-      moveNumber: i + 1,
-    }));
+
+    // Replay from scratch to collect every intermediate FEN for the undo stack.
+    // fenStack[i] = FEN *before* move i, matching the contract used by applyLocalMove/localUndo.
+    const replay = new Chess();
+    const fenStack: string[] = [];
+    const moves: Move[] = [];
+    for (let i = 0; i < history.length; i++) {
+      fenStack.push(replay.fen()); // FEN before this move
+      const m = history[i];
+      replay.move({ from: m.from, to: m.to, promotion: m.promotion });
+      moves.push({
+        san: m.san,
+        uci: `${m.from}${m.to}${m.promotion ?? ''}`,
+        color: m.color,
+        moveNumber: i + 1,
+      });
+    }
+
     set({
-      fen: chess.fen(),
-      chess,
+      fen: replay.fen(),
+      chess: replay,
       moves,
-      fenStack: [],
+      fenStack,      // populated — undo works move-by-move
       futureMoves: [],
       futureFens: [],
       selectedSquare: null,
