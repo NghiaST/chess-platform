@@ -4,7 +4,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger';
-import { rateLimiter } from './middlewares/rateLimiter';
+import { rateLimiter, analysisRateLimiter } from './middlewares/rateLimiter';
 import { errorHandler } from './middlewares/errorHandler';
 import { notFoundHandler } from './middlewares/notFoundHandler';
 
@@ -60,7 +60,13 @@ if (process.env.NODE_ENV !== 'test') {
   app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 }
 
-// ─── Rate Limiting ────────────────────────────────────────────────────────────
+// ─── Analysis Route (own rate limiter, before global) ─────────────────────────
+// Registered before the global rateLimiter so analysis requests are only
+// subject to analysisRateLimiter (120 req/min) and do NOT consume from the
+// shared 15-min global budget.
+app.use('/api/analysis', analysisRateLimiter, analysisRoutes);
+
+// ─── Rate Limiting (all other /api/* routes) ──────────────────────────────────
 app.use('/api/', rateLimiter);
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
@@ -73,7 +79,6 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/games', gameRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
-app.use('/api/analysis', analysisRoutes);
 
 // ─── Swagger Docs ─────────────────────────────────────────────────────────────
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
