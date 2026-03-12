@@ -8,6 +8,12 @@
 
 jest.mock('../config/database', () => ({ __esModule: true, default: {} }));
 jest.mock('../services/auth.service');
+// Bypass rate limiting in tests so repeated calls don't produce 429
+jest.mock('../middlewares/rateLimiter', () => ({
+  rateLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
+  authRateLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
+  analysisRateLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
+}));
 
 import request from 'supertest';
 import app from '../app';
@@ -94,11 +100,24 @@ describe('POST /api/auth/register', () => {
 
 // ── POST /api/auth/login ───────────────────────────────────────────────────────
 describe('POST /api/auth/login', () => {
-  it('returns 200 with token on valid credentials', async () => {
+  it('returns 200 with token when logging in with email', async () => {
     authServiceMock.login.mockResolvedValue(validUser);
 
     const res = await request(app).post('/api/auth/login').send({
-      email: 'player1@example.com',
+      identifier: 'player1@example.com',
+      password: 'secret123',
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.token).toBeDefined();
+    expect(res.body.data.user.username).toBe('player1');
+  });
+
+  it('returns 200 with token when logging in with username', async () => {
+    authServiceMock.login.mockResolvedValue(validUser);
+
+    const res = await request(app).post('/api/auth/login').send({
+      identifier: 'player1',
       password: 'secret123',
     });
 
@@ -106,20 +125,41 @@ describe('POST /api/auth/login', () => {
     expect(res.body.data.token).toBeDefined();
   });
 
-  it('returns 400 when email is missing', async () => {
+  it('returns 400 when identifier is missing', async () => {
     const res = await request(app).post('/api/auth/login').send({
       password: 'secret123',
     });
     expect(res.status).toBe(400);
+    expect(res.body.message).toContain('Email or username is required');
+  });
+
+  it('returns 400 when password is missing', async () => {
+    const res = await request(app).post('/api/auth/login').send({
+      identifier: 'player1',
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain('Password is required');
   });
 
   it('returns 401 when credentials are wrong', async () => {
     const { AppError } = await import('../middlewares/errorHandler');
-    authServiceMock.login.mockRejectedValue(new AppError('Invalid email or password.', 401));
+    authServiceMock.login.mockRejectedValue(new AppError('Invalid credentials.', 401));
 
     const res = await request(app).post('/api/auth/login').send({
-      email: 'player1@example.com',
+      identifier: 'player1@example.com',
       password: 'wrongpass',
+    });
+    expect(res.status).toBe(401);
+    expect(res.body.message).toBe('Invalid credentials.');
+  });
+
+  it('returns 401 when user does not exist', async () => {
+    const { AppError } = await import('../middlewares/errorHandler');
+    authServiceMock.login.mockRejectedValue(new AppError('Invalid credentials.', 401));
+
+    const res = await request(app).post('/api/auth/login').send({
+      identifier: 'ghost',
+      password: 'secret123',
     });
     expect(res.status).toBe(401);
   });

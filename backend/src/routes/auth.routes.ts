@@ -81,7 +81,7 @@ router.post(
  * @swagger
  * /api/auth/login:
  *   post:
- *     summary: Login with email and password
+ *     summary: Login with email or username and password
  *     tags: [Auth]
  *     requestBody:
  *       required: true
@@ -89,11 +89,11 @@ router.post(
  *         application/json:
  *           schema:
  *             type: object
- *             required: [email, password]
+ *             required: [identifier, password]
  *             properties:
- *               email:
+ *               identifier:
  *                 type: string
- *                 format: email
+ *                 description: Email address or username
  *                 example: player1@example.com
  *               password:
  *                 type: string
@@ -113,7 +113,7 @@ router.post(
   '/login',
   authRateLimiter,
   [
-    body('email').isEmail().normalizeEmail().withMessage('Invalid email'),
+    body('identifier').trim().notEmpty().withMessage('Email or username is required'),
     body('password').notEmpty().withMessage('Password is required'),
   ],
   validate,
