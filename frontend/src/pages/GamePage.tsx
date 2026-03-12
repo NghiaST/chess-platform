@@ -77,11 +77,13 @@ export default function GamePage() {
 
   // Quick centipawn evaluation for EvaluationBar in standard/practice modes
   // (study mode gets its eval from StudyPanel's full analysis)
+  // Gate: skip the starting position (moves.length === 0) to avoid a needless
+  // Stockfish call before either player has moved.
   const { data: evalData } = useQuery({
     queryKey: ['eval', fen],
     queryFn: () => gameService.analyze(fen, 1, true),
-    enabled: gameMode !== 'study' && status === 'active',
-    staleTime: 30_000,
+    enabled: gameMode !== 'study' && status === 'active' && moves.length > 0,
+    staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
 
