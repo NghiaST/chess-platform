@@ -12,10 +12,11 @@ interface ChessClockProps {
 }
 
 function formatTime(ms: number): string {
-  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+  const totalMs    = Math.max(0, ms);
+  const minutes    = Math.floor(totalMs / 60_000);
+  const seconds    = Math.floor((totalMs % 60_000) / 1_000);
+  const centis     = Math.floor((totalMs % 1_000) / 10);
+  return `${minutes}:${String(seconds).padStart(2, '0')}.${String(centis).padStart(2, '0')}`;
 }
 
 /**
@@ -46,7 +47,7 @@ export default function ChessClock({ initialMs, isActive, serverTs, color }: Che
     const interval = setInterval(() => {
       const elapsed = Date.now() - startRef.current;
       setDisplayMs(Math.max(0, baseRef.current - elapsed));
-    }, 100);
+    }, 10);   // 10ms for smooth centisecond display
     return () => clearInterval(interval);
   }, [isActive]);
 

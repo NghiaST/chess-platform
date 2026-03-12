@@ -56,6 +56,8 @@ export function useMultiplayerGame(gameId: string | null, myColor: 'white' | 'bl
       const delta = myColor === 'white' ? payload.whiteRatingDelta : payload.blackRatingDelta;
       setRatingDelta(delta);
       updateRating((user?.rating ?? 0) + delta);
+      // Stop the clock display
+      setClockState((prev) => prev ? { ...prev, activeColor: null } : null);
     };
 
     const handleOpponentConnected = ({ username }: { username: string }) => {
