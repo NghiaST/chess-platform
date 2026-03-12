@@ -59,7 +59,9 @@ export default function StudyPanel() {
     queryKey: ['analysis', debouncedFen, analysisLines],
     queryFn: () => gameService.analyze(debouncedFen, analysisLines, false),
     staleTime: 60_000,
+    gcTime: 5 * 60_000,   // keep cache entries 5 min before GC
     refetchOnWindowFocus: false,
+    retry: 1,             // one retry max — engine errors rarely benefit from retrying
   });
 
   // Keep evaluation store + board arrows in sync with analysis results
@@ -224,7 +226,16 @@ export default function StudyPanel() {
             <p className="text-xs text-gray-500 animate-pulse">Analysing…</p>
           )}
           {!analysisQuery.isFetching && analysisQuery.isError && (
-            <p className="text-xs text-red-400">Analysis failed</p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-red-400">Analysis failed</p>
+              <button
+                type="button"
+                onClick={() => analysisQuery.refetch()}
+                className="text-xs text-blue-400 hover:text-blue-300 underline"
+              >
+                Retry
+              </button>
+            </div>
           )}
           {analysisQuery.data?.lines.map((line, i) => (
             <div

@@ -86,6 +86,7 @@ export default function GamePage() {
     enabled: gameMode !== 'study' && status === 'active' && moves.length > 0,
     staleTime: 60_000,
     refetchOnWindowFocus: false,
+    retry: 1,
   });
 
   useEffect(() => {
