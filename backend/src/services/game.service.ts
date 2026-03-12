@@ -110,7 +110,9 @@ export class GameService {
 
     if (!moveResult) throw new AppError('Invalid move.', 400);
 
-    const moveNumber = chess.history().length;
+    // game.moves.length is the number of half-moves already stored.
+    // After the player's move it becomes the (length+1)-th half-move.
+    const moveNumber = game.moves.length + 1;
     const newFen = chess.fen();
 
     // Determine game status
@@ -153,7 +155,7 @@ export class GameService {
         const botMoveResult = botChess.move({ from: botFrom, to: botTo, promotion: botPromotion as 'q' | 'r' | 'b' | 'n' | undefined });
 
         if (botMoveResult) {
-          const botMoveNumber = botChess.history().length;
+          const botMoveNumber = game.moves.length + 2; // player's move + bot's move
           const botFen = botChess.fen();
 
           let botStatus: GameStatus = GameStatus.ACTIVE;
