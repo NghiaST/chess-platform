@@ -32,6 +32,7 @@ export default function StudyPanel() {
     fen,
     fenStack,
     futureMoves,
+    moves,
     localUndo,
     localRedo,
     loadStudyFen,
@@ -45,6 +46,8 @@ export default function StudyPanel() {
 
   const [fenInput, setFenInput] = useState('');
   const [fenError, setFenError] = useState<string | null>(null);
+  const [pgn, setPgn] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const canUndo = fenStack.length > 0;
   const canRedo = futureMoves.length > 0;
@@ -88,6 +91,21 @@ export default function StudyPanel() {
 
   const handleFenKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleFenLoad();
+  };
+
+  const handleExportPgn = () => {
+    if (moves.length === 0) return;
+    const tokens: string[] = [];
+    moves.forEach((m, i) => {
+      if (i % 2 === 0) tokens.push(`${Math.floor(i / 2) + 1}.`);
+      tokens.push(m.san);
+    });
+    const text = tokens.join(' ');
+    setPgn(text);
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {/* clipboard denied — text still shown below */});
   };
 
   return (
@@ -148,6 +166,29 @@ export default function StudyPanel() {
         >
           Redo →
         </button>
+      </div>
+
+      {/* Export PGN */}
+      <div>
+        <button
+          type="button"
+          onClick={handleExportPgn}
+          disabled={moves.length === 0}
+          className="btn-secondary w-full text-xs py-1.5 disabled:opacity-40"
+          title="Copy move list as PGN"
+        >
+          {copied ? '✓ Copied!' : 'Export PGN'}
+        </button>
+        {pgn && !copied && (
+          <textarea
+            readOnly
+            value={pgn}
+            rows={2}
+            className="mt-1.5 w-full bg-gray-900 border border-gray-700 rounded px-2 py-1
+                       text-xs text-gray-300 font-mono resize-none focus:outline-none"
+            onClick={(e) => (e.target as HTMLTextAreaElement).select()}
+          />
+        )}
       </div>
 
       {/* Analysis panel */}
