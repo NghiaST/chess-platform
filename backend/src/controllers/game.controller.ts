@@ -73,4 +73,17 @@ export class GameController {
       next(error);
     }
   }
+
+  async getHint(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.user) return next(new AppError('Unauthorized', 401));
+      const hint = await gameService.getHint({
+        gameId: req.params.id,
+        userId: req.user.id,
+      });
+      res.json({ status: 'success', data: hint });
+    } catch (error) {
+      next(error);
+    }
+  }
 }

@@ -306,5 +306,31 @@ export class GameService {
 
     return updatedGame;
   }
+
+  async getHint({ gameId, userId }: { gameId: string; userId: string }) {
+    const game = await gameRepo.findById(gameId);
+    if (!game) throw new AppError('Game not found.', 404);
+    if (game.status !== GameStatus.ACTIVE) throw new AppError('Game is not active.', 400);
+    if (game.mode !== 'practice' && game.mode !== 'study') throw new AppError('Hints are only available in practice or study mode.', 400);
+    if (game.whitePlayerId !== userId) throw new AppError('Only the player can request hints.', 403);
+
+    // Ask Stockfish for best move at a fixed skill level 20 (full strength) for hint
+    const bestUci = await getBotMove(game.fen, 20);
+
+    // Convert UCI to SAN using chess.js
+    const chess = new Chess(game.fen);
+    const moveResult = chess.move({
+      from: bestUci.slice(0, 2),
+      to: bestUci.slice(2, 4),
+      promotion: bestUci.length > 4 ? (bestUci[4] as 'q' | 'r' | 'b' | 'n') : undefined,
+    });
+
+    return {
+      uci: bestUci,
+      from: bestUci.slice(0, 2),
+      to: bestUci.slice(2, 4),
+      san: moveResult?.san ?? bestUci,
+    };
+  }
 }
 

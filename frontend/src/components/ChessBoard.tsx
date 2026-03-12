@@ -76,6 +76,7 @@ export default function ChessBoard({
     setRatingDelta,
     selectedSquare,
     setSelectedSquare,
+    hintArrow,
   } = useGameStore();
   const { user, updateRating } = useAuthStore();
   const { showLegalMoves, annotationColor } = useSettingsStore();
@@ -176,7 +177,7 @@ export default function ChessBoard({
         });
         if (moveResult) {
           applyMove(
-              { san: moveResult.san, uci: `${from}${to}${promotion ?? ''}`, color: moveResult.color, moveNumber: tempChess.history().length },
+            { san: moveResult.san, uci: `${from}${to}${promotion ?? ''}`, color: moveResult.color },
             tempChess.fen(),
           );
           return true;
@@ -465,6 +466,31 @@ export default function ChessBoard({
           height={boardPx}
           style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', zIndex: 10 }}
         >
+          {/* Hint arrow (green) from practice mode */}
+          {hintArrow && boardPx > 0 && (() => {
+            const from = squareToCenter(hintArrow.from as Square, boardPx, boardOrientation);
+            const to = squareToCenter(hintArrow.to as Square, boardPx, boardOrientation);
+            const dx = to.x - from.x;
+            const dy = to.y - from.y;
+            const r = Math.hypot(dx, dy);
+            if (!r) return null;
+            const reducer = boardPx / 32;
+            const end = { x: from.x + (dx * (r - reducer)) / r, y: from.y + (dy * (r - reducer)) / r };
+            return (
+              <g key="hint-arrow">
+                <marker id="hint-arrow-head" markerWidth="2" markerHeight="2.5" refX="1.25" refY="1.25" orient="auto">
+                  <polygon points="0.3 0, 2 1.25, 0.3 2.5" fill="#22c55e" />
+                </marker>
+                <line
+                  x1={from.x} y1={from.y} x2={end.x} y2={end.y}
+                  opacity="0.80"
+                  stroke="#22c55e"
+                  strokeWidth={boardPx / 36}
+                  markerEnd="url(#hint-arrow-head)"
+                />
+              </g>
+            );
+          })()}
           {renderedArrows.map((arrow) => (
             <g key={arrow.id}>
               <marker

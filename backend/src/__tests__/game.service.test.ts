@@ -343,3 +343,46 @@ describe('GameService.resign', () => {
     expect(result.ratingDelta).toBeNull();
   });
 });
+
+// ── getHint ────────────────────────────────────────────────────────────────────
+describe('GameService.getHint', () => {
+  it('returns uci, from, to, san for a valid hint', async () => {
+    const practiceGame = makeMockGame({ mode: 'practice', fen: INITIAL_FEN });
+    gameRepoMock.findById.mockResolvedValue(practiceGame as never);
+    mockGetBotMove.mockResolvedValue('e2e4');
+
+    const hint = await service.getHint({ gameId: GAME_ID, userId: USER_ID });
+
+    expect(hint.uci).toBe('e2e4');
+    expect(hint.from).toBe('e2');
+    expect(hint.to).toBe('e4');
+    expect(hint.san).toBeTruthy();
+    expect(mockGetBotMove).toHaveBeenCalledWith(INITIAL_FEN, 20);
+  });
+
+  it('throws 404 when game not found', async () => {
+    gameRepoMock.findById.mockResolvedValue(null as never);
+    await expect(service.getHint({ gameId: GAME_ID, userId: USER_ID }))
+      .rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it('throws 400 when game not active', async () => {
+    gameRepoMock.findById.mockResolvedValue(
+      makeMockGame({ mode: 'practice', status: GameStatus.FINISHED }) as never,
+    );
+    await expect(service.getHint({ gameId: GAME_ID, userId: USER_ID }))
+      .rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it('throws 400 when mode is standard', async () => {
+    gameRepoMock.findById.mockResolvedValue(makeMockGame({ mode: 'standard' }) as never);
+    await expect(service.getHint({ gameId: GAME_ID, userId: USER_ID }))
+      .rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it('throws 403 when userId is not the white player', async () => {
+    gameRepoMock.findById.mockResolvedValue(makeMockGame({ mode: 'practice' }) as never);
+    await expect(service.getHint({ gameId: GAME_ID, userId: 'other-user' }))
+      .rejects.toMatchObject({ statusCode: 403 });
+  });
+});

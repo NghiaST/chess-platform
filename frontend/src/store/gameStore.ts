@@ -8,6 +8,12 @@ interface Move {
   moveNumber?: number;
 }
 
+interface HintArrow {
+  from: string;
+  to: string;
+  san: string;
+}
+
 interface GameState {
   gameId: string | null;
   fen: string;
@@ -21,6 +27,7 @@ interface GameState {
   myColor: 'white' | 'black' | null;
   selectedSquare: Square | null;
   ratingDelta: number | null;
+  hintArrow: HintArrow | null;
 
   // Actions
   initGame: (
@@ -36,6 +43,7 @@ interface GameState {
   setStatus: (status: 'idle' | 'active' | 'finished', result?: string | null) => void;
   setSelectedSquare: (square: Square | null) => void;
   setRatingDelta: (delta: number | null) => void;
+  setHintArrow: (hint: HintArrow | null) => void;
   resetGame: () => void;
 }
 
@@ -54,6 +62,7 @@ export const useGameStore = create<GameState>((set) => ({
   myColor: null,
   selectedSquare: null,
   ratingDelta: null,
+  hintArrow: null,
 
   initGame: (gameId, fen, isBotGame, botLevel, myColor = null, gameMode = 'standard') =>
     set({
@@ -68,6 +77,7 @@ export const useGameStore = create<GameState>((set) => ({
       gameMode,
       myColor,
       selectedSquare: null,
+      hintArrow: null,
     }),
 
   applyMove: (move, newFen) =>
@@ -83,10 +93,11 @@ export const useGameStore = create<GameState>((set) => ({
         },
       ],
       selectedSquare: null,
+      hintArrow: null,
     })),
 
   revertToFen: (previousFen, previousMoves) =>
-    set({ fen: previousFen, chess: new Chess(previousFen), moves: previousMoves, selectedSquare: null }),
+    set({ fen: previousFen, chess: new Chess(previousFen), moves: previousMoves, selectedSquare: null, hintArrow: null }),
 
   setStatus: (status, result = undefined) =>
     set({ status, result: result ?? null }),
@@ -96,6 +107,9 @@ export const useGameStore = create<GameState>((set) => ({
 
   setRatingDelta: (delta) =>
     set({ ratingDelta: delta }),
+
+  setHintArrow: (hint) =>
+    set({ hintArrow: hint }),
 
   resetGame: () =>
     set({
@@ -109,5 +123,6 @@ export const useGameStore = create<GameState>((set) => ({
       myColor: null,
       ratingDelta: null,
       selectedSquare: null,
+      hintArrow: null,
     }),
 }));

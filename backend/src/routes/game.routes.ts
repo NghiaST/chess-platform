@@ -222,4 +222,13 @@ router.post(
   gameController.undoMove
 );
 
+// GET /api/games/:id/hint — practice/study mode only
+router.get(
+  '/:id/hint',
+  authenticate,
+  [param('id').isUUID().withMessage('Invalid game ID')],
+  validate,
+  gameController.getHint
+);
+
 export default router;

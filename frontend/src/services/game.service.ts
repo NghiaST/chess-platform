@@ -27,4 +27,7 @@ export const gameService = {
 
   undoMove: (gameId: string) =>
     api.post(`/games/${gameId}/undo`).then((r) => r.data.data),
+
+  getHint: (gameId: string) =>
+    api.get(`/games/${gameId}/hint`).then((r) => r.data.data) as Promise<{ uci: string; from: string; to: string; san: string }>,
 };
