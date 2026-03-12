@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { gameService } from '@/services/game.service';
@@ -7,129 +6,163 @@ import { useAuthStore } from '@/store/authStore';
 
 type GameMode = 'standard' | 'practice' | 'study';
 
-const MODES: { id: GameMode; label: string; description: string; comingSoon?: true }[] = [
-  { id: 'standard', label: '♟ Standard', description: 'Rated game, ELO updates after match.' },
-  { id: 'practice', label: '🎯 Practice', description: 'Practice interface (beta), gameplay unchanged for now.' },
-  { id: 'study',    label: '🔬 Study',    description: 'Play both sides and analyse lines.' },
+const BOT_LEVELS = [
+  { label: 'Beginner',     level: 1,  icon: '🤖', color: 'text-green-400',  colorBg: 'group-hover:border-green-700',  description: 'Perfect for learning'   },
+  { label: 'Intermediate', level: 5,  icon: '♜',  color: 'text-yellow-400', colorBg: 'group-hover:border-yellow-700', description: 'A solid challenge'      },
+  { label: 'Advanced',     level: 10, icon: '♚',  color: 'text-orange-400', colorBg: 'group-hover:border-orange-700', description: 'Strong amateur play'    },
+  { label: 'Expert',       level: 15, icon: '🏆', color: 'text-red-400',    colorBg: 'group-hover:border-red-700',    description: 'Master-level strength'  },
 ];
+
+function SectionHeading({ icon, title, badge }: { icon: string; title: string; badge?: string }) {
+  return (
+    <div className="flex items-center gap-3 mb-6">
+      <span className="text-2xl">{icon}</span>
+      <h2 className="text-xl font-bold text-white">{title}</h2>
+      {badge && (
+        <span className="text-[10px] font-semibold uppercase tracking-wider bg-blue-900/60 text-blue-300 border border-blue-700/60 rounded px-2 py-0.5">
+          {badge}
+        </span>
+      )}
+      <div className="flex-1 border-t border-gray-800 ml-2" />
+    </div>
+  );
+}
+
+function LevelGrid({
+  onSelect,
+  isPending,
+}: {
+  onSelect: (level: number) => void;
+  isPending: boolean;
+}) {
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {BOT_LEVELS.map(({ label, level, icon, color, colorBg, description }) => (
+        <button
+          key={level}
+          onClick={() => onSelect(level)}
+          disabled={isPending}
+          className={`group card p-5 text-left border border-gray-700/80 hover:border-gray-600
+                      ${colorBg} transition-all duration-150 hover:scale-[1.03]
+                      disabled:opacity-50 disabled:cursor-not-allowed`}
+        >
+          <div className={`text-2xl mb-2 ${color}`}>{icon}</div>
+          <p className="font-semibold text-white text-sm">{label}</p>
+          <p className="text-gray-500 text-xs mt-0.5">{description}</p>
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export default function HomePage() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuthStore();
   const { initGame } = useGameStore();
-  const [selectedMode, setSelectedMode] = useState<GameMode>('standard');
 
-  const createGameMutation = useMutation({
+  const createGame = useMutation({
     mutationFn: ({ botLevel, mode }: { botLevel: number; mode: GameMode }) =>
       gameService.createGame({ isBotGame: true, botLevel, mode }),
-    onSuccess: (game) => {
-      initGame(game.id, game.fen, true, game.botLevel ?? 5, null, selectedMode);
+    onSuccess: (game, { mode }) => {
+      initGame(game.id, game.fen, true, game.botLevel ?? 5, null, mode);
       navigate(`/game/${game.id}`);
     },
   });
 
-  const handlePlayBot = (level: number) => {
-    if (!isAuthenticated) {
-      navigate('/login');
-      return;
-    }
-    createGameMutation.mutate({ botLevel: level, mode: selectedMode });
+  const guard = (cb: () => void) => {
+    if (!isAuthenticated) { navigate('/login'); return; }
+    cb();
   };
 
-  const BOT_LEVELS = [
-    { label: 'Beginner', level: 1, description: 'Level 1 — Perfect for learning', color: 'text-green-400' },
-    { label: 'Intermediate', level: 5, description: 'Level 5 — A good challenge', color: 'text-yellow-400' },
-    { label: 'Advanced', level: 10, description: 'Level 10 — Play like a strong amateur', color: 'text-orange-400' },
-    { label: 'Expert', level: 15, description: 'Level 15 — Master-level play', color: 'text-red-400' },
-  ];
-
   return (
-    <div className="max-w-5xl mx-auto px-4 py-16">
-      {/* Hero */}
-      <div className="text-center mb-16">
-        <div className="text-7xl mb-6">♟</div>
-        <h1 className="text-5xl font-bold text-white mb-4">
-          Play Chess Online
-        </h1>
-        <p className="text-gray-400 text-xl max-w-2xl mx-auto">
-          Sharpen your skills against our bot or challenge real players (coming soon).
-          Track your rating, climb the leaderboard, and replay your games.
+    <div className="max-w-4xl mx-auto px-4 py-14 space-y-14">
+
+      {/* ── Hero ─────────────────────────────────────────────────────────── */}
+      <div className="text-center">
+        <div className="text-6xl mb-5">♟</div>
+        <h1 className="text-4xl font-bold text-white mb-3">Play Chess Online</h1>
+        <p className="text-gray-400 max-w-xl mx-auto">
+          Train against the bot, study positions freely, or challenge real players.
         </p>
       </div>
 
-      {/* Play vs Bot section */}
-      <div className="mb-16">
-        <h2 className="text-2xl font-bold text-white text-center mb-6">
-          Play vs Bot
-        </h2>
-
-        {/* Mode selector */}
-        <div className="flex flex-wrap justify-center gap-3 mb-8">
-          {MODES.map(({ id, label, description, comingSoon }) => (
-            <button
-              key={id}
-              onClick={() => !comingSoon && setSelectedMode(id)}
-              disabled={!!comingSoon}
-              title={comingSoon ? 'Coming soon' : description}
-              className={`relative px-5 py-2.5 rounded-lg border text-sm font-medium transition-all duration-150
-                ${selectedMode === id && !comingSoon
-                  ? 'border-blue-500 bg-blue-600/20 text-blue-300'
-                  : comingSoon
-                    ? 'border-gray-700 text-gray-600 cursor-not-allowed'
-                    : 'border-gray-700 text-gray-300 hover:border-gray-500 hover:text-white'
-                }`}
-            >
-              {label}
-              {comingSoon && (
-                <span className="ml-2 text-[10px] bg-gray-700 text-gray-400 rounded px-1 py-0.5 align-middle">
-                  soon
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {BOT_LEVELS.map(({ label, level, description, color }) => (
-            <button
-              key={level}
-              onClick={() => handlePlayBot(level)}
-              disabled={createGameMutation.isPending}
-              className="card p-6 text-left hover:border-gray-600 transition-all duration-200
-                         hover:scale-105 cursor-pointer group disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <div className={`text-3xl mb-3 ${color}`}>
-                {level <= 3 ? '🤖' : level <= 7 ? '♜' : level <= 12 ? '♚' : '🏆'}
-              </div>
-              <h3 className="font-bold text-white text-lg mb-1">{label}</h3>
-              <p className="text-gray-400 text-sm">{description}</p>
-            </button>
-          ))}
-        </div>
-        {createGameMutation.isError && (
-          <p className="text-red-400 text-center mt-4 text-sm">
-            Failed to create game. Please try again.
-          </p>
-        )}
-      </div>
-
-      {/* Play Online */}
-      <div className="card p-8 text-center">
-        <div className="text-4xl mb-4">🌐</div>
-        <h2 className="text-2xl font-bold text-white mb-2">Play Online</h2>
-        <p className="text-gray-400 mb-4">
-          Challenge a real player in real-time. Ratings update after every game.
+      {/* ── Standard ─────────────────────────────────────────────────────── */}
+      <section>
+        <SectionHeading icon="♟" title="Standard" />
+        <p className="text-gray-400 text-sm mb-5">
+          Rated games — your ELO updates after every match. Pick a difficulty and play.
         </p>
-        <button
-          onClick={() => {
-            if (!isAuthenticated) { navigate('/login'); return; }
-            navigate('/lobby');
-          }}
-          className="btn-primary mt-2"
-        >
-          Find Opponent
-        </button>
-      </div>
+        <LevelGrid
+          isPending={createGame.isPending}
+          onSelect={(level) => guard(() => createGame.mutate({ botLevel: level, mode: 'standard' }))}
+        />
+      </section>
+
+      {/* ── Practice ─────────────────────────────────────────────────────── */}
+      <section>
+        <SectionHeading icon="🎯" title="Practice" badge="BETA" />
+        <p className="text-gray-400 text-sm mb-5">
+          No rating pressure. Undo moves after a mistake and ask for a hint when stuck.
+        </p>
+        <LevelGrid
+          isPending={createGame.isPending}
+          onSelect={(level) => guard(() => createGame.mutate({ botLevel: level, mode: 'practice' }))}
+        />
+      </section>
+
+      {/* ── Study ────────────────────────────────────────────────────────── */}
+      <section>
+        <SectionHeading icon="🔬" title="Study" />
+        <div className="card border border-gray-700/80 p-6 flex flex-col sm:flex-row sm:items-center gap-6">
+          <div className="flex-1">
+            <h3 className="text-white font-semibold mb-1">Free exploration board</h3>
+            <p className="text-gray-400 text-sm">
+              Play both colours freely — no turn restriction, no bot response. Use undo to backtrack
+              and explore alternative lines. Ideal for opening prep and endgame drills.
+            </p>
+            <ul className="mt-3 flex flex-wrap gap-2">
+              {['Move both sides', 'Unlimited undo', 'No ELO changes', 'Get Stockfish hints'].map((f) => (
+                <li key={f} className="text-xs bg-gray-800 text-gray-300 rounded-full px-3 py-1 border border-gray-700">
+                  {f}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <button
+            onClick={() => guard(() => createGame.mutate({ botLevel: 5, mode: 'study' }))}
+            disabled={createGame.isPending}
+            className="btn-primary shrink-0 px-8 py-3 disabled:opacity-50"
+          >
+            {createGame.isPending ? 'Starting…' : 'Start Studying'}
+          </button>
+        </div>
+      </section>
+
+      {/* ── Play Online ──────────────────────────────────────────────────── */}
+      <section>
+        <SectionHeading icon="🌐" title="Play Online" />
+        <div className="card border border-gray-700/80 p-6 flex flex-col sm:flex-row sm:items-center gap-6">
+          <div className="flex-1">
+            <h3 className="text-white font-semibold mb-1">Challenge a real player</h3>
+            <p className="text-gray-400 text-sm">
+              Join the matchmaking lobby and get paired with an opponent around your rating.
+              Real-time moves via WebSocket. ELO updates after every game.
+            </p>
+          </div>
+          <button
+            onClick={() => guard(() => navigate('/lobby'))}
+            className="btn-primary shrink-0 px-8 py-3"
+          >
+            Find Opponent
+          </button>
+        </div>
+      </section>
+
+      {createGame.isError && (
+        <p className="text-red-400 text-center text-sm">
+          Failed to create game. Please try again.
+        </p>
+      )}
     </div>
   );
 }
