@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Chess } from 'chess.js';
 import { useQuery } from '@tanstack/react-query';
 import { useGameStore, type AnalysisArrow } from '@/store/gameStore';
@@ -35,6 +35,7 @@ export default function StudyPanel() {
     moves,
     localUndo,
     localRedo,
+    jumpToMove,
     loadStudyFen,
     loadStudyPgn,
     setEvaluation,
@@ -57,6 +58,16 @@ export default function StudyPanel() {
 
   const canUndo = fenStack.length > 0;
   const canRedo = futureMoves.length > 0;
+
+  // All moves visible (applied + future/redo) and cursor = how many are applied
+  const allMoves = [...moves, ...futureMoves];
+  const cursor   = moves.length;   // 0 = before first move, k = after k-th move
+
+  // Ref for auto-scrolling the active move into view
+  const activeMoveRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    activeMoveRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [cursor]);
 
   // Debounce FEN so rapid moves don't fire analysis on every intermediate position
   const debouncedFen = useDebounce(fen, 350);
@@ -246,6 +257,65 @@ export default function StudyPanel() {
           Redo →
         </button>
       </div>
+
+      {/* Clickable move list */}
+      {allMoves.length > 0 && (
+        <div className="overflow-y-auto max-h-40 rounded border border-gray-800">
+          <table className="w-full text-xs">
+            <tbody>
+              {/* Pair rows */}
+              {Array.from({ length: Math.ceil(allMoves.length / 2) }, (_, pi) => {
+                const wi = pi * 2;      // white half-move index (0-based)
+                const bi = pi * 2 + 1; // black half-move index
+                const wMove = allMoves[wi];
+                const bMove = allMoves[bi];
+                // cursor k means moves[0..k-1] applied, so move at idx i is active when cursor == i+1
+                const wActive = cursor === wi + 1;
+                const bActive = cursor === bi + 1;
+                return (
+                  <tr key={pi} className="border-b border-gray-800/40 last:border-0 hover:bg-gray-800/20">
+                    <td className="pl-2 pr-1 py-1 text-gray-600 font-mono w-6 select-none">{pi + 1}.</td>
+                    <td className="pr-0.5 py-0.5 w-1/2">
+                      <button
+                        ref={wActive ? activeMoveRef : undefined}
+                        type="button"
+                        onClick={() => jumpToMove(wi + 1)}
+                        className={`w-full text-left px-1.5 py-0.5 rounded transition-colors font-mono ${
+                          wActive
+                            ? 'bg-blue-900/50 text-blue-300 font-semibold'
+                            : wi < cursor
+                            ? 'text-gray-300 hover:bg-gray-700/40'
+                            : 'text-gray-600 hover:bg-gray-700/40'
+                        }`}
+                      >
+                        {wMove.san}
+                      </button>
+                    </td>
+                    <td className="pr-1 py-0.5 w-1/2">
+                      {bMove && (
+                        <button
+                          ref={bActive ? activeMoveRef : undefined}
+                          type="button"
+                          onClick={() => jumpToMove(bi + 1)}
+                          className={`w-full text-left px-1.5 py-0.5 rounded transition-colors font-mono ${
+                            bActive
+                              ? 'bg-blue-900/50 text-blue-300 font-semibold'
+                              : bi < cursor
+                              ? 'text-gray-300 hover:bg-gray-700/40'
+                              : 'text-gray-600 hover:bg-gray-700/40'
+                          }`}
+                        >
+                          {bMove.san}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Export — PGN + FEN */}
       <div>

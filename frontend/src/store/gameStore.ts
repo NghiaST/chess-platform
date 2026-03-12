@@ -67,6 +67,8 @@ interface GameState {
   loadStudyFen: (fen: string) => void;
   /** Load a full PGN into study mode — sets final FEN + full move list. */
   loadStudyPgn: (pgn: string) => void;
+  /** Jump to after move k (0 = before any move, moves.length+futureMoves.length = last). */
+  jumpToMove: (k: number) => void;
   revertToFen: (previousFen: string, previousMoves: Move[]) => void;
   setStatus: (status: 'idle' | 'active' | 'finished', result?: string | null) => void;
   setSelectedSquare: (square: Square | null) => void;
@@ -243,6 +245,27 @@ export const useGameStore = create<GameState>((set) => ({
 
   revertToFen: (previousFen, previousMoves) =>
     set({ fen: previousFen, chess: new Chess(previousFen), moves: previousMoves, selectedSquare: null, hintArrow: null }),
+
+  jumpToMove: (k) =>
+    set((state) => {
+      const allFens  = [...state.fenStack, state.fen, ...state.futureFens];
+      const allMoves = [...state.moves, ...state.futureMoves];
+      const total    = allMoves.length;
+      const target   = Math.max(0, Math.min(k, total));
+      return {
+        fen:          allFens[target],
+        chess:        new Chess(allFens[target]),
+        moves:        allMoves.slice(0, target),
+        fenStack:     allFens.slice(0, target),
+        futureMoves:  allMoves.slice(target),
+        futureFens:   allFens.slice(target + 1),
+        selectedSquare: null,
+        hintArrow:    null,
+        analysisArrows: [],
+        evaluation:   null,
+        evalMate:     null,
+      };
+    }),
 
   setStatus: (status, result = undefined) =>
     set({ status, result: result ?? null }),

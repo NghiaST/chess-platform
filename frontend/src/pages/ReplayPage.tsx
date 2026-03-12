@@ -174,7 +174,7 @@ export default function ReplayPage() {
       const w = game.moves[i];
       const b = game.moves[i + 1];
       pairs.push({
-        moveNumber: w.moveNumber,
+        moveNumber: Math.floor(i / 2) + 1,  // turn number, not half-move index
         white: { san: w.san, idx: i + 1 },
         black: b ? { san: b.san, idx: i + 2 } : undefined,
       });
