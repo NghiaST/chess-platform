@@ -29,6 +29,77 @@ const userRepo = new UserRepository();
 // In-memory matchmaking queue: userId → socketId
 const queue = new Map<string, string>();
 
+// ── PvP Chess Clock ────────────────────────────────────────────────────────────
+
+const INITIAL_TIME_MS = 10 * 60 * 1000; // 10+0
+
+interface ClockEntry {
+  whiteMs: number;
+  blackMs: number;
+  /** Whose clock is currently running ('w'|'b'), or null when game ended. */
+  activeColor: 'w' | 'b' | null;
+  /** Date.now() when the running side's clock was last (re)started. */
+  lastStartedAt: number;
+  timeoutHandle: ReturnType<typeof setTimeout> | null;
+}
+
+const clocks = new Map<string, ClockEntry>();
+
+/** Compute a client-friendly snapshot that accounts for elapsed time. */
+function clockSnapshot(entry: ClockEntry) {
+  const elapsed = entry.activeColor ? Math.max(0, Date.now() - entry.lastStartedAt) : 0;
+  const whiteMs = entry.activeColor === 'w'
+    ? Math.max(0, entry.whiteMs - elapsed)
+    : entry.whiteMs;
+  const blackMs = entry.activeColor === 'b'
+    ? Math.max(0, entry.blackMs - elapsed)
+    : entry.blackMs;
+  return { whiteMs, blackMs, activeColor: entry.activeColor, serverTs: Date.now() };
+}
+
+/** Stop and clear any running timeout for a game's clock. */
+function clearClock(gameId: string) {
+  const entry = clocks.get(gameId);
+  if (entry?.timeoutHandle) clearTimeout(entry.timeoutHandle);
+  clocks.delete(gameId);
+}
+
+/** Called when a side's flag falls. Finalises the game in DB + emits events. */
+async function handleClockTimeout(gameId: string, loserColor: 'w' | 'b') {
+  try {
+    const game = await gameRepo.findById(gameId);
+    if (!game || game.status !== 'ACTIVE') return;
+
+    const result = loserColor === 'w' ? GameResult.BLACK_WIN : GameResult.WHITE_WIN;
+    await gameRepo.updateFenAndStatus({ gameId, fen: game.fen, status: GameStatus.FINISHED, result });
+
+    const entry = clocks.get(gameId);
+    if (entry) {
+      if (loserColor === 'w') entry.whiteMs = 0; else entry.blackMs = 0;
+      entry.activeColor = null;
+      entry.timeoutHandle = null;
+    }
+
+    let whiteDelta = 0, blackDelta = 0;
+    if (game.blackPlayerId) {
+      ({ whiteDelta, blackDelta } = await applyMultiplayerElo(
+        gameId, game.whitePlayerId, game.blackPlayerId, result,
+      ));
+    }
+
+    io.to(`game:${gameId}`).emit('clock:timeout', { loser: loserColor });
+    io.to(`game:${gameId}`).emit('game:ended', {
+      result,
+      whiteRatingDelta: whiteDelta,
+      blackRatingDelta: blackDelta,
+    });
+
+    clocks.delete(gameId);
+  } catch (err) {
+    logger.error('clock timeout error', err);
+  }
+}
+
 // ── ELO helper for multiplayer ─────────────────────────────────────────────────
 
 async function applyMultiplayerElo(
@@ -147,6 +218,20 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
         // Notify both players
         io.to(opponentSocketId).emit('queue:matched', { gameId, color: 'white' });
         socket.emit('queue:matched', { gameId, color: 'black' });
+
+        // Start clock: white moves first, so white's clock ticks immediately
+        const clockEntry: ClockEntry = {
+          whiteMs: INITIAL_TIME_MS,
+          blackMs: INITIAL_TIME_MS,
+          activeColor: 'w',
+          lastStartedAt: Date.now(),
+          timeoutHandle: null,
+        };
+        clockEntry.timeoutHandle = setTimeout(
+          () => handleClockTimeout(gameId, 'w'),
+          INITIAL_TIME_MS,
+        );
+        clocks.set(gameId, clockEntry);
       } catch (err) {
         logger.error('queue:join error', err);
         socket.emit('error', { message: 'Matchmaking failed. Please try again.' });
@@ -175,6 +260,12 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
 
         // Send current game state to the joining socket
         socket.emit('game:state', { game });
+
+        // Send current clock state (handles reconnect)
+        const clockEntry = clocks.get(gameId);
+        if (clockEntry) {
+          socket.emit('clock:state', clockSnapshot(clockEntry));
+        }
       } catch (err) {
         logger.error('game:join error', err);
         socket.emit('error', { message: 'Failed to join game.' });
@@ -234,6 +325,35 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
           // Broadcast move to everyone in the room (including sender)
           io.to(`game:${gameId}`).emit('game:move', movePayload);
 
+          // ── Update clock ────────────────────────────────────────────────────
+          const clockEntry = clocks.get(gameId);
+          if (clockEntry && clockEntry.activeColor) {
+            const elapsed = Math.max(0, Date.now() - clockEntry.lastStartedAt);
+            if (clockEntry.activeColor === 'w') clockEntry.whiteMs = Math.max(0, clockEntry.whiteMs - elapsed);
+            else                                clockEntry.blackMs = Math.max(0, clockEntry.blackMs - elapsed);
+
+            // Clear old timeout
+            if (clockEntry.timeoutHandle) clearTimeout(clockEntry.timeoutHandle);
+
+            if (newStatus === GameStatus.FINISHED) {
+              // Game already over — stop clock
+              clockEntry.activeColor = null;
+              clockEntry.timeoutHandle = null;
+              clocks.delete(gameId);
+            } else {
+              // Switch to the other side
+              const nextColor: 'w' | 'b' = turn === 'w' ? 'b' : 'w';
+              clockEntry.activeColor = nextColor;
+              clockEntry.lastStartedAt = Date.now();
+              const nextMs = nextColor === 'w' ? clockEntry.whiteMs : clockEntry.blackMs;
+              clockEntry.timeoutHandle = setTimeout(
+                () => handleClockTimeout(gameId, nextColor),
+                nextMs,
+              );
+              io.to(`game:${gameId}`).emit('clock:state', clockSnapshot(clockEntry));
+            }
+          }
+
           if (newStatus === GameStatus.FINISHED && result && game.blackPlayerId) {
             const { whiteDelta, blackDelta } = await applyMultiplayerElo(
               gameId, game.whitePlayerId, game.blackPlayerId, result,
@@ -265,6 +385,9 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
 
         const result = game.whitePlayerId === userId ? GameResult.BLACK_WIN : GameResult.WHITE_WIN;
         await gameRepo.updateFenAndStatus({ gameId, fen: game.fen, status: GameStatus.FINISHED, result });
+
+        // Stop the clock
+        clearClock(gameId);
 
         let whiteDelta = 0, blackDelta = 0;
         if (game.blackPlayerId) {

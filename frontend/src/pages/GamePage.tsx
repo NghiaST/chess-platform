@@ -6,6 +6,7 @@ import MoveHistory from '@/components/MoveHistory';
 import PracticePanel from '@/components/PracticePanel';
 import StudyPanel from '@/components/StudyPanel';
 import EvaluationBar from '@/components/EvaluationBar';
+import ChessClock from '@/components/ChessClock';
 import { useGameStore } from '@/store/gameStore';
 import { useAuthStore } from '@/store/authStore';
 import { useLobbyStore } from '@/store/lobbyStore';
@@ -25,7 +26,7 @@ export default function GamePage() {
   const resolvedColor = myColor ?? lobbyColor;
 
   // Multiplayer socket hook — only active for non-bot games
-  const { opponentConnected, opponentUsername, emitMove, emitResign } = useMultiplayerGame(
+  const { opponentConnected, opponentUsername, clockState, emitMove, emitResign } = useMultiplayerGame(
     !isBotGame && gameId ? gameId : null,
     resolvedColor,
   );
@@ -217,19 +218,45 @@ export default function GamePage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Chess Board + Evaluation Bar */}
         <div className="lg:col-span-2">
-          {id && (
-            <div className="flex gap-2 items-stretch">
-              <EvaluationBar score={evaluation} mate={evalMate} orientation={boardOrientation} />
-              <div className="flex-1 min-w-0">
-                <ChessBoard
-              gameId={id}
-              boardOrientation={boardOrientation}
-              onMakeMove={!isBotGame ? emitMove : undefined}
-              allowedColor={!isBotGame ? allowedColor : undefined}
-            />
+          {id && (() => {
+            // Which colour is physically at the top vs bottom of the board?
+            const topColor:    'white' | 'black' = boardOrientation === 'white' ? 'black' : 'white';
+            const bottomColor: 'white' | 'black' = boardOrientation;
+            const showClocks = !isBotGame && !!clockState;
+            const clockTs = clockState?.serverTs ?? Date.now();
+
+            return (
+              <div className="flex gap-2 items-stretch">
+                <EvaluationBar score={evaluation} mate={evalMate} orientation={boardOrientation} />
+                <div className="flex-1 min-w-0 flex flex-col gap-2">
+                  {/* Opponent clock (top) */}
+                  {showClocks && (
+                    <ChessClock
+                      color={topColor}
+                      initialMs={topColor === 'white' ? clockState!.whiteMs : clockState!.blackMs}
+                      isActive={clockState!.activeColor === (topColor === 'white' ? 'w' : 'b')}
+                      serverTs={clockTs}
+                    />
+                  )}
+                  <ChessBoard
+                    gameId={id}
+                    boardOrientation={boardOrientation}
+                    onMakeMove={!isBotGame ? emitMove : undefined}
+                    allowedColor={!isBotGame ? allowedColor : undefined}
+                  />
+                  {/* My clock (bottom) */}
+                  {showClocks && (
+                    <ChessClock
+                      color={bottomColor}
+                      initialMs={bottomColor === 'white' ? clockState!.whiteMs : clockState!.blackMs}
+                      isActive={clockState!.activeColor === (bottomColor === 'white' ? 'w' : 'b')}
+                      serverTs={clockTs}
+                    />
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
 
         {/* Sidebar */}

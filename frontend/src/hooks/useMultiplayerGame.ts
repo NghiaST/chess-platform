@@ -23,11 +23,19 @@ interface GameEndedPayload {
   blackRatingDelta: number;
 }
 
+export interface ClockStatePayload {
+  whiteMs: number;
+  blackMs: number;
+  activeColor: 'w' | 'b' | null;
+  serverTs: number;
+}
+
 export function useMultiplayerGame(gameId: string | null, myColor: 'white' | 'black' | null) {
   const { applyMove, setStatus, setRatingDelta } = useGameStore();
   const { token, user, updateRating } = useAuthStore();
   const [opponentConnected, setOpponentConnected] = useState(false);
   const [opponentUsername, setOpponentUsername] = useState<string | null>(null);
+  const [clockState, setClockState] = useState<ClockStatePayload | null>(null);
   const joinedRef = useRef(false);
 
   useEffect(() => {
@@ -59,10 +67,21 @@ export function useMultiplayerGame(gameId: string | null, myColor: 'white' | 'bl
       setOpponentConnected(false);
     };
 
+    const handleClockState = (payload: ClockStatePayload) => {
+      setClockState(payload);
+    };
+
+    const handleClockTimeout = () => {
+      // game:ended will arrive shortly from the server; no extra action needed here
+      setClockState((prev) => prev ? { ...prev, activeColor: null } : null);
+    };
+
     socket.on('game:move', handleMove);
     socket.on('game:ended', handleEnded);
     socket.on('opponent:connected', handleOpponentConnected);
     socket.on('opponent:disconnected', handleOpponentDisconnected);
+    socket.on('clock:state', handleClockState);
+    socket.on('clock:timeout', handleClockTimeout);
 
     // Join game room once
     if (!joinedRef.current) {
@@ -75,6 +94,8 @@ export function useMultiplayerGame(gameId: string | null, myColor: 'white' | 'bl
       socket.off('game:ended', handleEnded);
       socket.off('opponent:connected', handleOpponentConnected);
       socket.off('opponent:disconnected', handleOpponentDisconnected);
+      socket.off('clock:state', handleClockState);
+      socket.off('clock:timeout', handleClockTimeout);
     };
   }, [gameId, myColor, token, applyMove, setStatus, setRatingDelta]);
 
@@ -88,5 +109,5 @@ export function useMultiplayerGame(gameId: string | null, myColor: 'white' | 'bl
     getSocket().emit('game:resign', { gameId });
   };
 
-  return { opponentConnected, opponentUsername, emitMove, emitResign };
+  return { opponentConnected, opponentUsername, clockState, emitMove, emitResign };
 }
