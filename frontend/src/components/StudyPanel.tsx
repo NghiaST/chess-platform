@@ -36,6 +36,7 @@ export default function StudyPanel() {
     localUndo,
     localRedo,
     loadStudyFen,
+    loadStudyPgn,
     setEvaluation,
     setAnalysisArrows,
     hintArrow,
@@ -44,10 +45,15 @@ export default function StudyPanel() {
 
   const { analysisLines, setAnalysisLines } = useSettingsStore();
 
+  // Load section
+  const [loadTab, setLoadTab] = useState<'fen' | 'pgn'>('fen');
   const [fenInput, setFenInput] = useState('');
-  const [fenError, setFenError] = useState<string | null>(null);
-  const [pgn, setPgn] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [pgnInput, setPgnInput] = useState('');
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  // Export feedback
+  const [pgnCopied, setPgnCopied] = useState(false);
+  const [fenCopied, setFenCopied] = useState(false);
 
   const canUndo = fenStack.length > 0;
   const canRedo = futureMoves.length > 0;
@@ -81,33 +87,55 @@ export default function StudyPanel() {
     const trimmed = fenInput.trim();
     if (!trimmed) return;
     try {
-      new Chess(trimmed); // throws if invalid
+      new Chess(trimmed);
       loadStudyFen(trimmed);
       setFenInput('');
-      setFenError(null);
+      setLoadError(null);
       if (hintArrow) setHintArrow(null);
     } catch {
-      setFenError('Invalid FEN string');
+      setLoadError('Invalid FEN string');
     }
   };
 
-  const handleFenKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') handleFenLoad();
+  const handlePgnLoad = () => {
+    const trimmed = pgnInput.trim();
+    if (!trimmed) return;
+    try {
+      loadStudyPgn(trimmed);
+      setPgnInput('');
+      setLoadError(null);
+      if (hintArrow) setHintArrow(null);
+    } catch {
+      setLoadError('Invalid PGN — check move syntax');
+    }
   };
 
-  const handleExportPgn = () => {
-    if (moves.length === 0) return;
+  const handleLoadKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') loadTab === 'fen' ? handleFenLoad() : handlePgnLoad();
+  };
+
+  const buildPgn = () => {
+    if (moves.length === 0) return '';
     const tokens: string[] = [];
     moves.forEach((m, i) => {
       if (i % 2 === 0) tokens.push(`${Math.floor(i / 2) + 1}.`);
       tokens.push(m.san);
     });
-    const text = tokens.join(' ');
-    setPgn(text);
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }).catch(() => {/* clipboard denied — text still shown below */});
+    return tokens.join(' ');
+  };
+
+  const handleCopyPgn = () => {
+    const text = buildPgn();
+    if (!text) return;
+    navigator.clipboard.writeText(text).catch(() => {});
+    setPgnCopied(true);
+    setTimeout(() => setPgnCopied(false), 2000);
+  };
+
+  const handleCopyFen = () => {
+    navigator.clipboard.writeText(fen).catch(() => {});
+    setFenCopied(true);
+    setTimeout(() => setFenCopied(false), 2000);
   };
 
   return (
@@ -122,30 +150,79 @@ export default function StudyPanel() {
         </span>
       </div>
 
-      {/* FEN loader */}
+      {/* Load section — FEN / PGN tabs */}
       <div>
-        <p className="text-xs text-gray-500 mb-1">Load position from FEN</p>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={fenInput}
-            onChange={(e) => { setFenInput(e.target.value); setFenError(null); }}
-            onKeyDown={handleFenKeyDown}
-            placeholder="Paste FEN…"
-            className="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded px-2 py-1.5
-                       text-xs text-white placeholder:text-gray-600
-                       focus:outline-none focus:border-blue-500"
-          />
+        {/* Tab switcher */}
+        <div className="flex mb-2 rounded overflow-hidden border border-gray-700 text-xs">
           <button
             type="button"
-            onClick={handleFenLoad}
-            disabled={!fenInput.trim()}
-            className="btn-secondary text-xs py-1.5 px-3 shrink-0 disabled:opacity-40"
+            onClick={() => { setLoadTab('fen'); setLoadError(null); }}
+            className={`flex-1 py-1 font-medium transition-colors ${
+              loadTab === 'fen'
+                ? 'bg-blue-700 text-white'
+                : 'bg-gray-800 text-gray-400 hover:text-white'
+            }`}
           >
-            Load
+            FEN
+          </button>
+          <button
+            type="button"
+            onClick={() => { setLoadTab('pgn'); setLoadError(null); }}
+            className={`flex-1 py-1 font-medium transition-colors ${
+              loadTab === 'pgn'
+                ? 'bg-blue-700 text-white'
+                : 'bg-gray-800 text-gray-400 hover:text-white'
+            }`}
+          >
+            PGN
           </button>
         </div>
-        {fenError && <p className="text-[11px] text-red-400 mt-1">{fenError}</p>}
+
+        {loadTab === 'fen' ? (
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={fenInput}
+              onChange={(e) => { setFenInput(e.target.value); setLoadError(null); }}
+              onKeyDown={handleLoadKeyDown}
+              placeholder="Paste FEN…"
+              className="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded px-2 py-1.5
+                         text-xs text-white placeholder:text-gray-600
+                         focus:outline-none focus:border-blue-500"
+            />
+            <button
+              type="button"
+              onClick={handleFenLoad}
+              disabled={!fenInput.trim()}
+              className="btn-secondary text-xs py-1.5 px-3 shrink-0 disabled:opacity-40"
+            >
+              Load
+            </button>
+          </div>
+        ) : (
+          <>
+            <textarea
+              value={pgnInput}
+              onChange={(e) => { setPgnInput(e.target.value); setLoadError(null); }}
+              onKeyDown={handleLoadKeyDown}
+              placeholder={`Paste PGN…\ne.g. 1. e4 e5 2. Nf3 Nc6`}
+              rows={3}
+              className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5
+                         text-xs text-white placeholder:text-gray-600 font-mono resize-none
+                         focus:outline-none focus:border-blue-500"
+            />
+            <button
+              type="button"
+              onClick={handlePgnLoad}
+              disabled={!pgnInput.trim()}
+              className="btn-secondary w-full text-xs py-1.5 mt-1.5 disabled:opacity-40"
+            >
+              Load PGN
+            </button>
+          </>
+        )}
+
+        {loadError && <p className="text-[11px] text-red-400 mt-1">{loadError}</p>}
       </div>
 
       {/* Undo / Redo */}
@@ -170,27 +247,28 @@ export default function StudyPanel() {
         </button>
       </div>
 
-      {/* Export PGN */}
+      {/* Export — PGN + FEN */}
       <div>
-        <button
-          type="button"
-          onClick={handleExportPgn}
-          disabled={moves.length === 0}
-          className="btn-secondary w-full text-xs py-1.5 disabled:opacity-40"
-          title="Copy move list as PGN"
-        >
-          {copied ? '✓ Copied!' : 'Export PGN'}
-        </button>
-        {pgn && !copied && (
-          <textarea
-            readOnly
-            value={pgn}
-            rows={2}
-            className="mt-1.5 w-full bg-gray-900 border border-gray-700 rounded px-2 py-1
-                       text-xs text-gray-300 font-mono resize-none focus:outline-none"
-            onClick={(e) => (e.target as HTMLTextAreaElement).select()}
-          />
-        )}
+        <p className="text-xs text-gray-500 mb-1.5">Export</p>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={handleCopyPgn}
+            disabled={moves.length === 0}
+            className="btn-secondary flex-1 text-xs py-1.5 disabled:opacity-40"
+            title="Copy move list as PGN"
+          >
+            {pgnCopied ? '✓ PGN copied!' : 'Copy PGN'}
+          </button>
+          <button
+            type="button"
+            onClick={handleCopyFen}
+            className="btn-secondary flex-1 text-xs py-1.5"
+            title="Copy current position as FEN"
+          >
+            {fenCopied ? '✓ FEN copied!' : 'Copy FEN'}
+          </button>
+        </div>
       </div>
 
       {/* Analysis panel */}

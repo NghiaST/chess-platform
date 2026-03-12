@@ -65,6 +65,8 @@ interface GameState {
   localRedo: () => void;
   /** Reset the board to a new FEN (study mode — load position). */
   loadStudyFen: (fen: string) => void;
+  /** Load a full PGN into study mode — sets final FEN + full move list. */
+  loadStudyPgn: (pgn: string) => void;
   revertToFen: (previousFen: string, previousMoves: Move[]) => void;
   setStatus: (status: 'idle' | 'active' | 'finished', result?: string | null) => void;
   setSelectedSquare: (square: Square | null) => void;
@@ -201,6 +203,31 @@ export const useGameStore = create<GameState>((set) => ({
       evaluation: null,
       evalMate: null,
     }),
+
+  loadStudyPgn: (pgn) => {
+    const chess = new Chess();
+    chess.loadPgn(pgn); // throws if invalid
+    const history = chess.history({ verbose: true });
+    const moves: Move[] = history.map((m, i) => ({
+      san: m.san,
+      uci: `${m.from}${m.to}${m.promotion ?? ''}`,
+      color: m.color,
+      moveNumber: i + 1,
+    }));
+    set({
+      fen: chess.fen(),
+      chess,
+      moves,
+      fenStack: [],
+      futureMoves: [],
+      futureFens: [],
+      selectedSquare: null,
+      hintArrow: null,
+      analysisArrows: [],
+      evaluation: null,
+      evalMate: null,
+    });
+  },
 
   revertToFen: (previousFen, previousMoves) =>
     set({ fen: previousFen, chess: new Chess(previousFen), moves: previousMoves, selectedSquare: null, hintArrow: null }),
