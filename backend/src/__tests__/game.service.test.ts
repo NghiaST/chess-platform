@@ -272,6 +272,78 @@ describe('GameService.makeMove — player wins by checkmate (ELO applied)', () =
   });
 });
 
+// ── makeMove — study mode ──────────────────────────────────────────────────────
+describe('GameService.makeMove — study mode', () => {
+  const studyGame = () => makeMockGame({ mode: 'study', isBotGame: true });
+
+  beforeEach(() => {
+    gameRepoMock.addMove.mockResolvedValue({} as never);
+    gameRepoMock.updateFenAndStatus.mockResolvedValue({
+      ...studyGame(),
+      fen: 'updated-fen',
+      moves: [],
+    });
+  });
+
+  it('allows white (the game owner) to move as white', async () => {
+    gameRepoMock.findById.mockResolvedValue(studyGame());
+    const result = await service.makeMove({
+      gameId: GAME_ID, userId: USER_ID, from: 'e2', to: 'e4',
+    });
+    expect(result.move.uci).toBe('e2e4');
+    expect(result.botMove).toBeNull();
+  });
+
+  it('does NOT call getBotMove after the player move', async () => {
+    gameRepoMock.findById.mockResolvedValue(studyGame());
+    await service.makeMove({ gameId: GAME_ID, userId: USER_ID, from: 'e2', to: 'e4' });
+    expect(mockGetBotMove).not.toHaveBeenCalled();
+  });
+
+  it('allows moving the black pieces (both colours free)', async () => {
+    // Simulate a position where it is black's turn
+    const tempChess = new Chess(INITIAL_FEN);
+    tempChess.move({ from: 'e2', to: 'e4' });
+    const blackToMoveFen = tempChess.fen();
+
+    gameRepoMock.findById.mockResolvedValue(
+      makeMockGame({ mode: 'study', isBotGame: true, fen: blackToMoveFen, moves: [{} as never] }),
+    );
+
+    const result = await service.makeMove({
+      gameId: GAME_ID,
+      userId: USER_ID, // same userId (white player) moving black's piece
+      from: 'e7',
+      to: 'e5',
+    });
+
+    expect(result.move.uci).toBe('e7e5');
+  });
+
+  it('does not apply ELO even if the position becomes checkmate', async () => {
+    const preMate =
+      'r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4';
+    gameRepoMock.findById.mockResolvedValue(
+      makeMockGame({ mode: 'study', isBotGame: true, fen: preMate }),
+    );
+    gameRepoMock.updateFenAndStatus.mockResolvedValue({
+      ...studyGame(),
+      fen: 'post-mate',
+      status: GameStatus.FINISHED,
+      result: GameResult.WHITE_WIN,
+      moves: [],
+    });
+
+    const result = await service.makeMove({
+      gameId: GAME_ID, userId: USER_ID, from: 'h5', to: 'f7',
+    });
+
+    expect(result.isGameOver).toBe(true);
+    expect(result.ratingDelta).toBeNull();
+    expect(userRepoMock.updateRating).not.toHaveBeenCalled();
+  });
+});
+
 // ── resign ─────────────────────────────────────────────────────────────────────
 describe('GameService.resign', () => {
   it('throws 404 when game not found', async () => {

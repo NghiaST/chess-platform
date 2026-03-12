@@ -92,8 +92,11 @@ export class GameService {
     const isWhite = game.whitePlayerId === userId;
     const isBlack = game.blackPlayerId === userId;
 
-    if ((turn === 'w' && !isWhite) || (turn === 'b' && !isBlack)) {
-      throw new AppError('Not your turn.', 400);
+    // Study mode: player explores freely and may move both colours
+    if (game.mode !== 'study') {
+      if ((turn === 'w' && !isWhite) || (turn === 'b' && !isBlack)) {
+        throw new AppError('Not your turn.', 400);
+      }
     }
 
     // Attempt the move
@@ -143,8 +146,8 @@ export class GameService {
       result,
     });
 
-    // If this is a bot game and the game is still active, make the bot's move
-    if (game.isBotGame && newStatus === GameStatus.ACTIVE) {
+    // If this is a bot game (and NOT study mode) and the game is still active, make the bot's move
+    if (game.isBotGame && game.mode !== 'study' && newStatus === GameStatus.ACTIVE) {
       try {
         const botUci = await getBotMove(newFen, game.botLevel ?? 5);
         const botFrom = botUci.slice(0, 2);
@@ -183,9 +186,9 @@ export class GameService {
             result: botResult,
           });
 
-          // Apply ELO if the bot's move ended the game (not in practice mode)
+          // Apply ELO only for standard mode bot games
           let ratingDelta: number | null = null;
-          if (botStatus === GameStatus.FINISHED && game.whitePlayer && game.mode !== 'practice') {
+          if (botStatus === GameStatus.FINISHED && game.whitePlayer && game.mode === 'standard') {
             ratingDelta = await applyBotGameElo(
               userId, gameId, game.whitePlayer.rating, game.botLevel ?? 5, botResult!
             );
@@ -214,9 +217,9 @@ export class GameService {
       }
     }
 
-    // Apply ELO if the player's own move ended a bot game (not in practice mode)
+    // Apply ELO only for standard mode bot games
     let eloChange: number | null = null;
-    if (game.isBotGame && newStatus === GameStatus.FINISHED && game.whitePlayer && game.mode !== 'practice') {
+    if (game.isBotGame && newStatus === GameStatus.FINISHED && game.whitePlayer && game.mode === 'standard') {
       eloChange = await applyBotGameElo(
         userId, gameId, game.whitePlayer.rating, game.botLevel ?? 5, result!
       );
@@ -251,9 +254,9 @@ export class GameService {
       result,
     });
 
-    // Apply ELO for resigning in a bot game (human is always white) — but not in practice mode
+    // Apply ELO only for standard mode bot game resigns
     let ratingDelta: number | null = null;
-    if (game.isBotGame && game.whitePlayer && isWhite && game.mode !== 'practice') {
+    if (game.isBotGame && game.whitePlayer && isWhite && game.mode === 'standard') {
       ratingDelta = await applyBotGameElo(
         userId, gameId, game.whitePlayer.rating, game.botLevel ?? 5, result
       );

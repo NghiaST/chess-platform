@@ -10,7 +10,7 @@ type GameMode = 'standard' | 'practice' | 'study';
 const MODES: { id: GameMode; label: string; description: string; comingSoon?: true }[] = [
   { id: 'standard', label: '♟ Standard', description: 'Rated game, ELO updates after match.' },
   { id: 'practice', label: '🎯 Practice', description: 'Practice interface (beta), gameplay unchanged for now.' },
-  { id: 'study',    label: '🔬 Study',    description: 'Play both sides and analyse lines.',  comingSoon: true },
+  { id: 'study',    label: '🔬 Study',    description: 'Play both sides and analyse lines.' },
 ];
 
 export default function HomePage() {
