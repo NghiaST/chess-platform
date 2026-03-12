@@ -36,6 +36,7 @@ export function useMultiplayerGame(gameId: string | null, myColor: 'white' | 'bl
   const [opponentConnected, setOpponentConnected] = useState(false);
   const [opponentUsername, setOpponentUsername] = useState<string | null>(null);
   const [clockState, setClockState] = useState<ClockStatePayload | null>(null);
+  const [opponentDisconnectDeadline, setOpponentDisconnectDeadline] = useState<number | null>(null);
   const joinedRef = useRef(false);
 
   useEffect(() => {
@@ -58,6 +59,8 @@ export function useMultiplayerGame(gameId: string | null, myColor: 'white' | 'bl
       updateRating((user?.rating ?? 0) + delta);
       // Stop the clock display
       setClockState((prev) => prev ? { ...prev, activeColor: null } : null);
+      // Clear any disconnect banner
+      setOpponentDisconnectDeadline(null);
     };
 
     const handleOpponentConnected = ({ username }: { username: string }) => {
@@ -67,6 +70,20 @@ export function useMultiplayerGame(gameId: string | null, myColor: 'white' | 'bl
 
     const handleOpponentDisconnected = () => {
       setOpponentConnected(false);
+    };
+
+    const handlePlayerDisconnected = ({ color, reconnectDeadline }: { color: 'w' | 'b'; reconnectDeadline: number }) => {
+      // Only show the banner when the *opponent* disconnects (not ourselves)
+      const myColorCode = myColor === 'white' ? 'w' : 'b';
+      if (color !== myColorCode) {
+        setOpponentDisconnectDeadline(reconnectDeadline);
+        setOpponentConnected(false);
+      }
+    };
+
+    const handlePlayerReconnected = () => {
+      setOpponentDisconnectDeadline(null);
+      setOpponentConnected(true);
     };
 
     const handleClockState = (payload: ClockStatePayload) => {
@@ -82,6 +99,8 @@ export function useMultiplayerGame(gameId: string | null, myColor: 'white' | 'bl
     socket.on('game:ended', handleEnded);
     socket.on('opponent:connected', handleOpponentConnected);
     socket.on('opponent:disconnected', handleOpponentDisconnected);
+    socket.on('player:disconnected', handlePlayerDisconnected);
+    socket.on('player:reconnected', handlePlayerReconnected);
     socket.on('clock:state', handleClockState);
     socket.on('clock:timeout', handleClockTimeout);
 
@@ -96,6 +115,8 @@ export function useMultiplayerGame(gameId: string | null, myColor: 'white' | 'bl
       socket.off('game:ended', handleEnded);
       socket.off('opponent:connected', handleOpponentConnected);
       socket.off('opponent:disconnected', handleOpponentDisconnected);
+      socket.off('player:disconnected', handlePlayerDisconnected);
+      socket.off('player:reconnected', handlePlayerReconnected);
       socket.off('clock:state', handleClockState);
       socket.off('clock:timeout', handleClockTimeout);
     };
@@ -111,5 +132,5 @@ export function useMultiplayerGame(gameId: string | null, myColor: 'white' | 'bl
     getSocket().emit('game:resign', { gameId });
   };
 
-  return { opponentConnected, opponentUsername, clockState, emitMove, emitResign };
+  return { opponentConnected, opponentUsername, clockState, opponentDisconnectDeadline, emitMove, emitResign };
 }

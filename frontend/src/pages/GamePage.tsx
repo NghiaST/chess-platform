@@ -7,6 +7,7 @@ import PracticePanel from '@/components/PracticePanel';
 import StudyPanel from '@/components/StudyPanel';
 import EvaluationBar from '@/components/EvaluationBar';
 import ChessClock from '@/components/ChessClock';
+import DisconnectBanner from '@/components/DisconnectBanner';
 import { useGameStore } from '@/store/gameStore';
 import { useAuthStore } from '@/store/authStore';
 import { useLobbyStore } from '@/store/lobbyStore';
@@ -26,7 +27,7 @@ export default function GamePage() {
   const resolvedColor = myColor ?? lobbyColor;
 
   // Multiplayer socket hook — only active for non-bot games
-  const { opponentConnected, opponentUsername, clockState, emitMove, emitResign } = useMultiplayerGame(
+  const { opponentConnected, opponentUsername, clockState, opponentDisconnectDeadline, emitMove, emitResign } = useMultiplayerGame(
     !isBotGame && gameId ? gameId : null,
     resolvedColor,
   );
@@ -190,7 +191,9 @@ export default function GamePage() {
             <p className={`text-xs mt-1 ${opponentConnected ? 'text-green-400' : 'text-yellow-400 animate-pulse'}`}>
               {opponentConnected
                 ? `${opponentUsername ?? 'Opponent'} is connected`
-                : 'Waiting for opponent to connect...'}
+                : opponentDisconnectDeadline
+                  ? `${opponentUsername ?? 'Opponent'} disconnected`
+                  : 'Waiting for opponent to connect...'}
             </p>
           )}
           {status === 'finished' && ratingDelta !== null && (
@@ -214,6 +217,16 @@ export default function GamePage() {
           </button>
         </div>
       </div>
+
+      {/* Disconnect banner — shown when opponent is mid-grace-period */}
+      {!isBotGame && opponentDisconnectDeadline !== null && status === 'active' && (
+        <div className="mb-4">
+          <DisconnectBanner
+            deadline={opponentDisconnectDeadline}
+            opponentName={opponentUsername}
+          />
+        </div>
+      )}
 
       {/* Game Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

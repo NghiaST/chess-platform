@@ -45,6 +45,20 @@ interface ClockEntry {
 
 const clocks = new Map<string, ClockEntry>();
 
+// ── Disconnect Grace ───────────────────────────────────────────────────────────
+
+const DISCONNECT_GRACE_MS = 30_000; // 30 seconds
+
+/** Tracks which active PvP game each socket is currently in. */
+const socketGameMap = new Map<string, { gameId: string; userId: string; color: 'w' | 'b' }>();
+
+/** Pending reconnect-or-lose timers keyed by gameId. */
+const disconnectTimers = new Map<string, {
+  userId: string;
+  color: 'w' | 'b';
+  handle: ReturnType<typeof setTimeout>;
+}>();
+
 /** Compute a client-friendly snapshot that accounts for elapsed time. */
 function clockSnapshot(entry: ClockEntry) {
   const elapsed = entry.activeColor ? Math.max(0, Date.now() - entry.lastStartedAt) : 0;
@@ -57,11 +71,14 @@ function clockSnapshot(entry: ClockEntry) {
   return { whiteMs, blackMs, activeColor: entry.activeColor, serverTs: Date.now() };
 }
 
-/** Stop and clear any running timeout for a game's clock. */
+/** Stop and clear any running timeout for a game's clock + disconnect timer. */
 function clearClock(gameId: string) {
   const entry = clocks.get(gameId);
   if (entry?.timeoutHandle) clearTimeout(entry.timeoutHandle);
   clocks.delete(gameId);
+  // Also cancel any pending disconnect grace timer for this game
+  const dcTimer = disconnectTimers.get(gameId);
+  if (dcTimer) { clearTimeout(dcTimer.handle); disconnectTimers.delete(gameId); }
 }
 
 /** Called when a side's flag falls. Finalises the game in DB + emits events. */
@@ -97,6 +114,36 @@ async function handleClockTimeout(gameId: string, loserColor: 'w' | 'b') {
     clocks.delete(gameId);
   } catch (err) {
     logger.error('clock timeout error', err);
+  }
+}
+
+/** Called when a player's 30 s grace period expires without reconnecting. */
+async function handleDisconnectTimeout(gameId: string, loserColor: 'w' | 'b') {
+  disconnectTimers.delete(gameId);
+  try {
+    const game = await gameRepo.findById(gameId);
+    if (!game || game.status !== 'ACTIVE') return;
+
+    const result = loserColor === 'w' ? GameResult.BLACK_WIN : GameResult.WHITE_WIN;
+    await gameRepo.updateFenAndStatus({ gameId, fen: game.fen, status: GameStatus.FINISHED, result });
+    clearClock(gameId);
+
+    let whiteDelta = 0, blackDelta = 0;
+    if (game.blackPlayerId) {
+      ({ whiteDelta, blackDelta } = await applyMultiplayerElo(
+        gameId, game.whitePlayerId, game.blackPlayerId, result,
+      ));
+    }
+
+    io.to(`game:${gameId}`).emit('game:ended', {
+      result,
+      reason: 'disconnect',
+      whiteRatingDelta: whiteDelta,
+      blackRatingDelta: blackDelta,
+    });
+    logger.info(`Game ${gameId}: ${loserColor} forfeited by disconnect`);
+  } catch (err) {
+    logger.error('disconnect timeout error', err);
   }
 }
 
@@ -255,6 +302,21 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
 
         await socket.join(`game:${gameId}`);
 
+        // Register socket → game for disconnect grace tracking (active PvP only)
+        if (game.status === GameStatus.ACTIVE && game.blackPlayerId) {
+          const playerColor: 'w' | 'b' = game.whitePlayerId === userId ? 'w' : 'b';
+          socketGameMap.set(socket.id, { gameId, userId, color: playerColor });
+
+          // Cancel pending disconnect timer if this player reconnects in time
+          const pendingDc = disconnectTimers.get(gameId);
+          if (pendingDc && pendingDc.userId === userId) {
+            clearTimeout(pendingDc.handle);
+            disconnectTimers.delete(gameId);
+            socket.to(`game:${gameId}`).emit('player:reconnected', { color: playerColor });
+            logger.info(`${username} reconnected to ${gameId} within grace period`);
+          }
+        }
+
         // Tell everyone else in the room that an opponent connected
         socket.to(`game:${gameId}`).emit('opponent:connected', { username });
 
@@ -412,6 +474,23 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
     socket.on('disconnect', (reason) => {
       queue.delete(userId);
       logger.info(`Socket disconnected: ${socket.id} (${username}) — ${reason}`);
+
+      // Start disconnect grace timer if this was an active PvP game
+      const gameInfo = socketGameMap.get(socket.id);
+      socketGameMap.delete(socket.id);
+
+      if (gameInfo && clocks.has(gameInfo.gameId)) {
+        const { gameId, userId: dcUserId, color: dcColor } = gameInfo;
+        const reconnectDeadline = Date.now() + DISCONNECT_GRACE_MS;
+        const handle = setTimeout(
+          () => handleDisconnectTimeout(gameId, dcColor),
+          DISCONNECT_GRACE_MS,
+        );
+        disconnectTimers.set(gameId, { userId: dcUserId, color: dcColor, handle });
+        io.to(`game:${gameId}`).emit('player:disconnected', { color: dcColor, reconnectDeadline });
+        logger.info(`${username} left ${gameId} — grace timer started (${DISCONNECT_GRACE_MS / 1000}s)`);
+      }
+
       // Notify any game rooms this socket was in
       for (const room of socket.rooms) {
         if (room.startsWith('game:')) {
@@ -450,4 +529,7 @@ export function clearClocks(): void {
     if (entry.timeoutHandle) clearTimeout(entry.timeoutHandle);
   });
   clocks.clear();
+  disconnectTimers.forEach(({ handle }) => clearTimeout(handle));
+  disconnectTimers.clear();
+  socketGameMap.clear();
 }
