@@ -1,5 +1,6 @@
 import { spawn } from 'child_process';
 import path from 'path';
+import { Chess } from 'chess.js';
 
 // Map botLevel (1-20) → Stockfish Skill Level (0-20) and search depth
 const SKILL_MAP: Record<number, { skill: number; depth: number }> = {
@@ -88,5 +89,137 @@ export function getBotMove(fen: string, botLevel: number): Promise<string> {
     child.stdin.write('isready\n');
     child.stdin.write(`position fen ${fen}\n`);
     child.stdin.write(`go depth ${config.depth}\n`);
+  });
+}
+
+// ─── Multi-PV Analysis ────────────────────────────────────────────────────────
+
+export interface AnalysisLine {
+  uci: string;
+  san: string;
+  /** Centipawns from White's perspective (positive = white advantage). */
+  score: number;
+  /** Non-null when Stockfish finds forced mate: +N = white mates in N, -N = black mates in N. */
+  mate: number | null;
+}
+
+/**
+ * Analyse a position with Stockfish MultiPV, returning up to `numLines` best
+ * moves sorted by engine preference.
+ *
+ * @param fen       FEN string of the position to analyse.
+ * @param numLines  How many lines to return (1–5).
+ * @param moveTimeMs How long (ms) the engine is allowed to think.
+ */
+export function analyzePosition(
+  fen: string,
+  numLines = 3,
+  moveTimeMs = 2500,
+): Promise<AnalysisLine[]> {
+  const lines = Math.min(Math.max(1, numLines), 5);
+
+  // Determine whose turn it is from the FEN (2nd space-separated field: 'w' or 'b')
+  const isBlackTurn = fen.split(' ')[1] === 'b';
+
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [STOCKFISH_SCRIPT], {
+      stdio: ['pipe', 'pipe', 'ignore'],
+    });
+
+    let buffer = '';
+    let settled = false;
+
+    // Track the latest result per multipv index (overwritten by deeper searches)
+    const bestPerLine = new Map<number, { score: number; mate: number | null; uci: string }>();
+
+    const finish = (err: Error | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      try { child.kill('SIGKILL'); } catch { /* ignore */ }
+
+      if (err) { reject(err); return; }
+
+      const output: AnalysisLine[] = [];
+
+      for (let idx = 1; idx <= lines; idx++) {
+        const r = bestPerLine.get(idx);
+        if (!r || !r.uci) continue;
+
+        const uci = r.uci;
+        const from = uci.slice(0, 2);
+        const to = uci.slice(2, 4);
+        const promotion = uci.length > 4 ? (uci[4] as 'q' | 'r' | 'b' | 'n') : undefined;
+
+        // Convert UCI → SAN for display
+        let san = uci;
+        try {
+          const tempChess = new Chess(fen);
+          const moveResult = tempChess.move({ from, to, promotion });
+          if (moveResult) san = moveResult.san;
+        } catch { /* keep uci as fallback */ }
+
+        output.push({ uci, san, score: r.score, mate: r.mate });
+      }
+
+      resolve(output);
+    };
+
+    const timeoutId = setTimeout(
+      () => finish(new Error('Stockfish analysis timeout')),
+      moveTimeMs + 5000,
+    );
+
+    child.stdout.on('data', (chunk: Buffer) => {
+      buffer += chunk.toString();
+      const rawLines = buffer.split('\n');
+      buffer = rawLines.pop() ?? '';
+
+      for (const line of rawLines) {
+        if (line.startsWith('bestmove ')) {
+          finish(null);
+          return;
+        }
+
+        if (line.startsWith('info ') && line.includes('multipv')) {
+          const mpvMatch = line.match(/\bmultipv (\d+)/);
+          if (!mpvMatch) continue;
+          const mpvIdx = parseInt(mpvMatch[1]);
+
+          let rawScore = 0;
+          let mate: number | null = null;
+
+          const mateMatch = line.match(/\bscore mate (-?\d+)/);
+          const cpMatch = line.match(/\bscore cp (-?\d+)/);
+
+          if (mateMatch) {
+            mate = parseInt(mateMatch[1]);
+            rawScore = mate > 0 ? 30000 : -30000;
+          } else if (cpMatch) {
+            rawScore = parseInt(cpMatch[1]);
+          } else {
+            continue;
+          }
+
+          // Flip to white-relative score
+          const score = isBlackTurn ? -rawScore : rawScore;
+          const whiteMate = mate !== null ? (isBlackTurn ? -mate : mate) : null;
+
+          // Extract first move from the principal variation
+          const pvMatch = line.match(/ pv ([a-h][1-8][a-h][1-8][qrbn]?)/);
+          if (!pvMatch) continue;
+
+          bestPerLine.set(mpvIdx, { score, mate: whiteMate, uci: pvMatch[1] });
+        }
+      }
+    });
+
+    child.on('error', (err: Error) => finish(err));
+
+    child.stdin.write(`setoption name MultiPV value ${lines}\n`);
+    child.stdin.write('uci\n');
+    child.stdin.write('isready\n');
+    child.stdin.write(`position fen ${fen}\n`);
+    child.stdin.write(`go movetime ${moveTimeMs}\n`);
   });
 }

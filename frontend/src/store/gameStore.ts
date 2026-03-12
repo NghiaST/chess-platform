@@ -14,6 +14,12 @@ interface HintArrow {
   san: string;
 }
 
+export interface AnalysisArrow {
+  from: string;
+  to: string;
+  color: string;
+}
+
 interface GameState {
   gameId: string | null;
   fen: string;
@@ -29,6 +35,18 @@ interface GameState {
   ratingDelta: number | null;
   hintArrow: HintArrow | null;
 
+  // Study mode — local undo/redo stack (no API calls)
+  fenStack: string[];       // FEN before each applyLocalMove
+  futureMoves: Move[];      // moves available for redo
+  futureFens: string[];     // FEN after each undone move
+
+  // Engine evaluation (white-relative centipawns)
+  evaluation: number | null;
+  evalMate: number | null;
+
+  // Analysis arrows shown on board (study mode)
+  analysisArrows: AnalysisArrow[];
+
   // Actions
   initGame: (
     gameId: string,
@@ -39,11 +57,21 @@ interface GameState {
     gameMode?: 'standard' | 'practice' | 'study',
   ) => void;
   applyMove: (move: Move, newFen: string) => void;
+  /** Apply a move locally (study mode only) — pushes to undo stack. */
+  applyLocalMove: (move: Move, newFen: string) => void;
+  /** Undo last local move (study mode). */
+  localUndo: () => void;
+  /** Redo previously undone local move (study mode). */
+  localRedo: () => void;
+  /** Reset the board to a new FEN (study mode — load position). */
+  loadStudyFen: (fen: string) => void;
   revertToFen: (previousFen: string, previousMoves: Move[]) => void;
   setStatus: (status: 'idle' | 'active' | 'finished', result?: string | null) => void;
   setSelectedSquare: (square: Square | null) => void;
   setRatingDelta: (delta: number | null) => void;
   setHintArrow: (hint: HintArrow | null) => void;
+  setEvaluation: (score: number | null, mate?: number | null) => void;
+  setAnalysisArrows: (arrows: AnalysisArrow[]) => void;
   resetGame: () => void;
 }
 
@@ -63,6 +91,12 @@ export const useGameStore = create<GameState>((set) => ({
   selectedSquare: null,
   ratingDelta: null,
   hintArrow: null,
+  fenStack: [],
+  futureMoves: [],
+  futureFens: [],
+  evaluation: null,
+  evalMate: null,
+  analysisArrows: [],
 
   initGame: (gameId, fen, isBotGame, botLevel, myColor = null, gameMode = 'standard') =>
     set({
@@ -78,6 +112,12 @@ export const useGameStore = create<GameState>((set) => ({
       myColor,
       selectedSquare: null,
       hintArrow: null,
+      fenStack: [],
+      futureMoves: [],
+      futureFens: [],
+      evaluation: null,
+      evalMate: null,
+      analysisArrows: [],
     }),
 
   applyMove: (move, newFen) =>
@@ -88,13 +128,79 @@ export const useGameStore = create<GameState>((set) => ({
         ...state.moves,
         {
           ...move,
-          // Keep a stable sequence number for reliable history rendering.
           moveNumber: move.moveNumber ?? state.moves.length + 1,
         },
       ],
       selectedSquare: null,
       hintArrow: null,
     })),
+
+  applyLocalMove: (move, newFen) =>
+    set((state) => ({
+      fen: newFen,
+      chess: new Chess(newFen),
+      moves: [
+        ...state.moves,
+        { ...move, moveNumber: state.moves.length + 1 },
+      ],
+      fenStack: [...state.fenStack, state.fen],
+      futureMoves: [],   // new move clears redo history
+      futureFens: [],
+      selectedSquare: null,
+      hintArrow: null,
+      analysisArrows: [], // stale — StudyPanel will refetch
+    })),
+
+  localUndo: () =>
+    set((state) => {
+      if (state.fenStack.length === 0) return {};
+      const prevFen = state.fenStack[state.fenStack.length - 1];
+      const undoneMove = state.moves[state.moves.length - 1];
+      return {
+        fen: prevFen,
+        chess: new Chess(prevFen),
+        moves: state.moves.slice(0, -1),
+        fenStack: state.fenStack.slice(0, -1),
+        futureMoves: undoneMove ? [undoneMove, ...state.futureMoves] : state.futureMoves,
+        futureFens: [state.fen, ...state.futureFens],
+        selectedSquare: null,
+        hintArrow: null,
+        analysisArrows: [],
+      };
+    }),
+
+  localRedo: () =>
+    set((state) => {
+      if (state.futureMoves.length === 0) return {};
+      const [nextMove, ...restMoves] = state.futureMoves;
+      const [nextFen, ...restFens] = state.futureFens;
+      return {
+        fen: nextFen,
+        chess: new Chess(nextFen),
+        moves: [...state.moves, nextMove],
+        fenStack: [...state.fenStack, state.fen],
+        futureMoves: restMoves,
+        futureFens: restFens,
+        selectedSquare: null,
+        hintArrow: null,
+        analysisArrows: [],
+      };
+    }),
+
+  loadStudyFen: (fen) =>
+    set({
+      fen,
+      chess: new Chess(fen),
+      moves: [],
+      fenStack: [],
+      futureMoves: [],
+      futureFens: [],
+      selectedSquare: null,
+      hintArrow: null,
+      analysisArrows: [],
+      evaluation: null,
+      evalMate: null,
+    }),
 
   revertToFen: (previousFen, previousMoves) =>
     set({ fen: previousFen, chess: new Chess(previousFen), moves: previousMoves, selectedSquare: null, hintArrow: null }),
@@ -111,6 +217,12 @@ export const useGameStore = create<GameState>((set) => ({
   setHintArrow: (hint) =>
     set({ hintArrow: hint }),
 
+  setEvaluation: (score, mate = null) =>
+    set({ evaluation: score, evalMate: mate }),
+
+  setAnalysisArrows: (arrows) =>
+    set({ analysisArrows: arrows }),
+
   resetGame: () =>
     set({
       gameId: null,
@@ -124,5 +236,11 @@ export const useGameStore = create<GameState>((set) => ({
       ratingDelta: null,
       selectedSquare: null,
       hintArrow: null,
+      fenStack: [],
+      futureMoves: [],
+      futureFens: [],
+      evaluation: null,
+      evalMate: null,
+      analysisArrows: [],
     }),
 }));

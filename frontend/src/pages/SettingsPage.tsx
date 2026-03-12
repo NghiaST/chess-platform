@@ -31,8 +31,10 @@ export default function SettingsPage() {
   const {
     showLegalMoves,
     premoveEnabled,
+    analysisLines,
     setShowLegalMoves,
     setPremoveEnabled,
+    setAnalysisLines,
     resetSettings,
   } = useSettingsStore();
 
@@ -57,6 +59,35 @@ export default function SettingsPage() {
           checked={premoveEnabled}
           onChange={setPremoveEnabled}
         />
+      </section>
+
+      {/* Study / Analysis settings */}
+      <section className="card p-5">
+        <h2 className="text-sm font-semibold text-white mb-4">Study Mode</h2>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-white">Engine analysis lines</p>
+            <p className="text-xs text-gray-400">
+              Number of best candidate moves shown in the Study panel (1–5).
+            </p>
+          </div>
+          <div className="flex gap-1">
+            {([1, 2, 3, 4, 5] as const).map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setAnalysisLines(n)}
+                className={`w-8 h-8 rounded text-sm font-medium transition-colors ${
+                  analysisLines === n
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                }`}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        </div>
       </section>
 
       <div>

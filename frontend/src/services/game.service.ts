@@ -30,4 +30,11 @@ export const gameService = {
 
   getHint: (gameId: string) =>
     api.get(`/games/${gameId}/hint`).then((r) => r.data.data) as Promise<{ uci: string; from: string; to: string; san: string }>,
+
+  analyze: (fen: string, numLines = 3, quick = false) =>
+    api.post('/analysis', { fen, numLines, quick }).then((r) => r.data.data) as Promise<{
+      lines: { uci: string; san: string; score: number; mate: number | null }[];
+      evaluation: number;
+      mate: number | null;
+    }>,
 };

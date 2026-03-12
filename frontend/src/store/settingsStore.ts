@@ -14,6 +14,8 @@ export interface AppSettings {
   pieceTheme: PieceTheme;
   backgroundTheme: BackgroundTheme;
   annotationColor: string;
+  /** Number of engine lines shown in Study mode analysis panel (1–5). */
+  analysisLines: 1 | 2 | 3 | 4 | 5;
 }
 
 export interface SettingsState extends AppSettings {
@@ -24,6 +26,7 @@ export interface SettingsState extends AppSettings {
   setPieceTheme: (theme: PieceTheme) => void;
   setBackgroundTheme: (theme: BackgroundTheme) => void;
   setAnnotationColor: (color: string) => void;
+  setAnalysisLines: (n: 1 | 2 | 3 | 4 | 5) => void;
   resetSettings: () => void;
 }
 
@@ -38,6 +41,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   pieceTheme: 'default',
   backgroundTheme: 'default',
   annotationColor: '#22c55e',
+  analysisLines: 3,
 };
 
 const createMemoryStorage = (): StateStorage => {
@@ -76,6 +80,7 @@ export const createSettingsStore = (storage?: StateStorage) =>
         setPieceTheme: (theme) => set({ pieceTheme: theme }),
         setBackgroundTheme: (theme) => set({ backgroundTheme: theme }),
         setAnnotationColor: (color) => set({ annotationColor: color }),
+        setAnalysisLines: (n) => set({ analysisLines: n }),
         resetSettings: () => set({ ...DEFAULT_SETTINGS }),
       }),
       {

@@ -70,13 +70,16 @@ export default function ChessBoard({
     status,
     result,
     moves,
+    gameMode,
     applyMove,
+    applyLocalMove,
     revertToFen,
     setStatus,
     setRatingDelta,
     selectedSquare,
     setSelectedSquare,
     hintArrow,
+    analysisArrows,
   } = useGameStore();
   const { user, updateRating } = useAuthStore();
   const { showLegalMoves, annotationColor } = useSettingsStore();
@@ -176,16 +179,18 @@ export default function ChessBoard({
           promotion: promotion as 'q' | 'r' | 'b' | 'n' | undefined,
         });
         if (moveResult) {
-          applyMove(
-            { san: moveResult.san, uci: `${from}${to}${promotion ?? ''}`, color: moveResult.color },
-            tempChess.fen(),
-          );
+          const moveData = { san: moveResult.san, uci: `${from}${to}${promotion ?? ''}`, color: moveResult.color };
+          if (gameMode === 'study') {
+            applyLocalMove(moveData, tempChess.fen());
+          } else {
+            applyMove(moveData, tempChess.fen());
+          }
           return true;
         }
       } catch { /* invalid move — board stays unchanged */ }
       return false;
     },
-    [chess, applyMove],
+    [chess, applyMove, applyLocalMove, gameMode],
   );
 
   const makeMoveMutation = useMutation({
@@ -230,6 +235,11 @@ export default function ChessBoard({
    */
   const dispatchMove = useCallback(
     (from: string, to: string, promotion?: string) => {
+      // Study mode: fully local, no API call, no bot
+      if (gameMode === 'study') {
+        applyMoveOptimistically(from, to, promotion);
+        return;
+      }
       if (onMakeMove) {
         // Multiplayer path: apply locally then let socket confirm
         applyMoveOptimistically(from, to, promotion);
@@ -241,13 +251,13 @@ export default function ChessBoard({
         }
       }
     },
-    [onMakeMove, applyMoveOptimistically, makeMoveMutation],
+    [gameMode, onMakeMove, applyMoveOptimistically, makeMoveMutation],
   );
 
   const onDrop = useCallback(
     (sourceSquare: string, targetSquare: string, piece: string): boolean => {
       if (status !== 'active') return false;
-      if (!onMakeMove && makeMoveMutation.isPending) return false;
+      if (!onMakeMove && makeMoveMutation.isPending && gameMode !== 'study') return false;
       if (allowedColor && chess.turn() !== allowedColor) return false;
 
       const movingPiece = chess.get(sourceSquare as Square);
@@ -264,6 +274,7 @@ export default function ChessBoard({
         onMakeMove(sourceSquare, targetSquare, promotion);
         return true;
       }
+      if (gameMode === 'study') return true; // already applied locally above
       makeMoveMutation.mutate({ from: sourceSquare, to: targetSquare, promotion });
       return true;
     },
@@ -491,6 +502,33 @@ export default function ChessBoard({
               </g>
             );
           })()}
+
+          {/* Analysis arrows (study mode) — one per engine line, coloured by rank */}
+          {boardPx > 0 && analysisArrows.map((arrow, idx) => {
+            const from = squareToCenter(arrow.from as Square, boardPx, boardOrientation);
+            const to = squareToCenter(arrow.to as Square, boardPx, boardOrientation);
+            const dx = to.x - from.x;
+            const dy = to.y - from.y;
+            const r = Math.hypot(dx, dy);
+            if (!r) return null;
+            const reducer = boardPx / 32;
+            const end = { x: from.x + (dx * (r - reducer)) / r, y: from.y + (dy * (r - reducer)) / r };
+            const markerId = `analysis-arrow-head-${idx}`;
+            return (
+              <g key={`analysis-arrow-${idx}`}>
+                <marker id={markerId} markerWidth="2" markerHeight="2.5" refX="1.25" refY="1.25" orient="auto">
+                  <polygon points="0.3 0, 2 1.25, 0.3 2.5" fill={arrow.color} />
+                </marker>
+                <line
+                  x1={from.x} y1={from.y} x2={end.x} y2={end.y}
+                  opacity="0.72"
+                  stroke={arrow.color}
+                  strokeWidth={boardPx / 38}
+                  markerEnd={`url(#${markerId})`}
+                />
+              </g>
+            );
+          })}
           {renderedArrows.map((arrow) => (
             <g key={arrow.id}>
               <marker

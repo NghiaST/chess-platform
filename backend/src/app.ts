@@ -13,6 +13,7 @@ import authRoutes from './routes/auth.routes';
 import userRoutes from './routes/user.routes';
 import gameRoutes from './routes/game.routes';
 import leaderboardRoutes from './routes/leaderboard.routes';
+import analysisRoutes from './routes/analysis.routes';
 
 const app: Application = express();
 
@@ -72,6 +73,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/games', gameRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
+app.use('/api/analysis', analysisRoutes);
 
 // ─── Swagger Docs ─────────────────────────────────────────────────────────────
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {

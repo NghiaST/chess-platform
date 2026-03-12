@@ -4,6 +4,8 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import ChessBoard from '@/components/ChessBoard';
 import MoveHistory from '@/components/MoveHistory';
 import PracticePanel from '@/components/PracticePanel';
+import StudyPanel from '@/components/StudyPanel';
+import EvaluationBar from '@/components/EvaluationBar';
 import { useGameStore } from '@/store/gameStore';
 import { useAuthStore } from '@/store/authStore';
 import { useLobbyStore } from '@/store/lobbyStore';
@@ -14,7 +16,8 @@ export default function GamePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { isAuthenticated, user, updateRating } = useAuthStore();
-  const { gameId, status, result, moves, isBotGame, botLevel, gameMode, myColor, ratingDelta, initGame, setStatus, setRatingDelta, resetGame } =
+  const { gameId, status, result, moves, isBotGame, botLevel, gameMode, myColor, ratingDelta, fen,
+          evaluation, evalMate, initGame, setStatus, setRatingDelta, setEvaluation, resetGame } =
     useGameStore();
   const { myColor: lobbyColor, reset: resetLobby } = useLobbyStore();
 
@@ -71,6 +74,22 @@ export default function GamePage() {
     // After first init from lobby, clear the lobby state
     if (game && lobbyColor) resetLobby();
   }, [game, gameId, user, lobbyColor, initGame, setStatus, resetLobby, gameMode]);
+
+  // Quick centipawn evaluation for EvaluationBar in standard/practice modes
+  // (study mode gets its eval from StudyPanel's full analysis)
+  const { data: evalData } = useQuery({
+    queryKey: ['eval', fen],
+    queryFn: () => gameService.analyze(fen, 1, true),
+    enabled: gameMode !== 'study' && status === 'active',
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+
+  useEffect(() => {
+    if (gameMode !== 'study' && evalData) {
+      setEvaluation(evalData.evaluation, evalData.mate);
+    }
+  }, [evalData, gameMode, setEvaluation]);
 
   // Bot resign via REST; multiplayer resign via socket
   const resignMutation = useMutation({
@@ -194,15 +213,20 @@ export default function GamePage() {
 
       {/* Game Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Chess Board */}
+        {/* Chess Board + Evaluation Bar */}
         <div className="lg:col-span-2">
           {id && (
-            <ChessBoard
+            <div className="flex gap-2 items-stretch">
+              <EvaluationBar score={evaluation} mate={evalMate} orientation={boardOrientation} />
+              <div className="flex-1 min-w-0">
+                <ChessBoard
               gameId={id}
               boardOrientation={boardOrientation}
               onMakeMove={!isBotGame ? emitMove : undefined}
               allowedColor={!isBotGame ? allowedColor : undefined}
             />
+              </div>
+            </div>
           )}
         </div>
 
@@ -239,10 +263,12 @@ export default function GamePage() {
             </div>
           </div>
 
-          {(gameMode === 'practice' || gameMode === 'study') && (
+          {gameMode === 'study' && <StudyPanel />}
+
+          {gameMode === 'practice' && (
             <PracticePanel
               gameId={id!}
-              mode={gameMode as 'practice' | 'study'}
+              mode="practice"
               undoEnabled={status === 'active' && moves.length > 0}
               onUndo={handleUndo}
             />
