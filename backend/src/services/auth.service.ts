@@ -12,7 +12,7 @@ interface RegisterDto {
 }
 
 interface LoginDto {
-  email: string;
+  identifier: string;   // email or username
   password: string;
 }
 
@@ -48,12 +48,16 @@ export class AuthService {
     };
   }
 
-  async login({ email, password }: LoginDto) {
-    const user = await userRepo.findByEmail(email);
-    if (!user) throw new AppError('Invalid email or password.', 401);
+  async login({ identifier, password }: LoginDto) {
+    // Support both email and username as identifier
+    const isEmail = identifier.includes('@');
+    const user = isEmail
+      ? await userRepo.findByEmail(identifier)
+      : await userRepo.findByUsername(identifier);
+    if (!user) throw new AppError('Invalid credentials.', 401);
 
     const isMatch = await bcrypt.compare(password, user.passwordHash);
-    if (!isMatch) throw new AppError('Invalid email or password.', 401);
+    if (!isMatch) throw new AppError('Invalid credentials.', 401);
 
     const token = this.signToken(user.id, user.email, user.username);
 

@@ -7,25 +7,44 @@ import { useAuthStore } from '@/store/authStore';
 export default function RegisterPage() {
   const navigate = useNavigate();
   const { setAuth } = useAuthStore();
-  const [form, setForm] = useState({ username: '', email: '', password: '' });
-  const [error, setError] = useState('');
+  const [form, setForm] = useState({ username: '', email: '', password: '', confirm: '' });
+  const [errors, setErrors] = useState<{ confirm?: string; server?: string }>({});
 
   const registerMutation = useMutation({
-    mutationFn: authService.register,
+    mutationFn: ({ username, email, password }: { username: string; email: string; password: string }) =>
+      authService.register({ username, email, password }),
     onSuccess: (data) => {
       setAuth(data.token, data.user);
       navigate('/');
     },
     onError: (err: { response?: { data?: { message?: string } } }) => {
-      setError(err.response?.data?.message ?? 'Registration failed. Please try again.');
+      setErrors({ server: err.response?.data?.message ?? 'Registration failed. Please try again.' });
     },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    registerMutation.mutate(form);
+    const next: typeof errors = {};
+    if (form.password !== form.confirm) next.confirm = 'Passwords do not match.';
+    if (Object.keys(next).length) { setErrors(next); return; }
+    setErrors({});
+    registerMutation.mutate({ username: form.username, email: form.email, password: form.password });
   };
+
+  const field = (key: keyof typeof form, label: string, type: string, placeholder: string, extra?: React.InputHTMLAttributes<HTMLInputElement>) => (
+    <div>
+      <label className="block text-sm text-gray-400 mb-1">{label}</label>
+      <input
+        type={type}
+        className="input"
+        placeholder={placeholder}
+        value={form[key]}
+        onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+        required
+        {...extra}
+      />
+    </div>
+  );
 
   return (
     <div className="flex items-center justify-center min-h-[80vh] px-4">
@@ -37,44 +56,31 @@ export default function RegisterPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {field('username', 'Username', 'text', 'chessmaster99', { autoComplete: 'username', minLength: 3, maxLength: 32 })}
+          {field('email', 'Email', 'email', 'you@example.com', { autoComplete: 'email' })}
+          {field('password', 'Password', 'password', 'Min 8 characters', { autoComplete: 'new-password', minLength: 8 })}
+
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Username</label>
-            <input
-              type="text"
-              className="input"
-              placeholder="chessmaster99"
-              value={form.username}
-              onChange={(e) => setForm({ ...form, username: e.target.value })}
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-gray-400 mb-1">Email</label>
-            <input
-              type="email"
-              className="input"
-              placeholder="you@example.com"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-gray-400 mb-1">Password</label>
+            <label className="block text-sm text-gray-400 mb-1">Confirm Password</label>
             <input
               type="password"
-              className="input"
-              placeholder="Min 8 characters"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              className={`input ${
+                errors.confirm ? 'border-red-500 focus:border-red-500' : ''
+              }`}
+              placeholder="Repeat your password"
+              value={form.confirm}
+              onChange={(e) => { setForm({ ...form, confirm: e.target.value }); setErrors((p) => ({ ...p, confirm: undefined })); }}
+              autoComplete="new-password"
               required
-              minLength={8}
             />
+            {errors.confirm && (
+              <p className="text-xs text-red-400 mt-1">{errors.confirm}</p>
+            )}
           </div>
 
-          {error && (
+          {errors.server && (
             <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
-              <p className="text-red-400 text-sm">{error}</p>
+              <p className="text-red-400 text-sm">{errors.server}</p>
             </div>
           )}
 
@@ -83,7 +89,7 @@ export default function RegisterPage() {
             disabled={registerMutation.isPending}
             className="btn-primary w-full"
           >
-            {registerMutation.isPending ? 'Creating account...' : 'Create Account'}
+            {registerMutation.isPending ? 'Creating account…' : 'Create Account'}
           </button>
         </form>
 

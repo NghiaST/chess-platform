@@ -7,7 +7,7 @@ import { useAuthStore } from '@/store/authStore';
 export default function LoginPage() {
   const navigate = useNavigate();
   const { setAuth } = useAuthStore();
-  const [form, setForm] = useState({ email: '', password: '' });
+  const [form, setForm] = useState({ identifier: '', password: '' });
   const [error, setError] = useState('');
 
   const loginMutation = useMutation({
@@ -38,13 +38,14 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Email</label>
+            <label className="block text-sm text-gray-400 mb-1">Email or Username</label>
             <input
-              type="email"
+              type="text"
               className="input"
-              placeholder="you@example.com"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              placeholder="you@example.com or chessmaster99"
+              value={form.identifier}
+              onChange={(e) => setForm({ ...form, identifier: e.target.value })}
+              autoComplete="username"
               required
             />
           </div>
@@ -56,6 +57,7 @@ export default function LoginPage() {
               placeholder="••••••••"
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
+              autoComplete="current-password"
               required
             />
           </div>
@@ -71,14 +73,14 @@ export default function LoginPage() {
             disabled={loginMutation.isPending}
             className="btn-primary w-full"
           >
-            {loginMutation.isPending ? 'Signing in...' : 'Sign In'}
+            {loginMutation.isPending ? 'Signing in…' : 'Sign In'}
           </button>
         </form>
 
         <p className="text-center text-gray-400 text-sm mt-6">
-          Don't have an account?{' '}
+          Don’t have an account?{' '}
           <Link to="/register" className="text-blue-400 hover:text-blue-300">
-            Register
+            Create one
           </Link>
         </p>
       </div>
