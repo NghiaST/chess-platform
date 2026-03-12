@@ -357,7 +357,7 @@ describe('GameService.getHint', () => {
     expect(hint.from).toBe('e2');
     expect(hint.to).toBe('e4');
     expect(hint.san).toBeTruthy();
-    expect(mockGetBotMove).toHaveBeenCalledWith(INITIAL_FEN, 20);
+    expect(mockGetBotMove).toHaveBeenCalledWith(INITIAL_FEN, 10);
   });
 
   it('throws 404 when game not found', async () => {

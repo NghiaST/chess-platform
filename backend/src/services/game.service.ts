@@ -314,8 +314,8 @@ export class GameService {
     if (game.mode !== 'practice' && game.mode !== 'study') throw new AppError('Hints are only available in practice or study mode.', 400);
     if (game.whitePlayerId !== userId) throw new AppError('Only the player can request hints.', 403);
 
-    // Ask Stockfish for best move at a fixed skill level 20 (full strength) for hint
-    const bestUci = await getBotMove(game.fen, 20);
+    // Ask Stockfish for best move at level 10 — strong enough for hints without long think time
+    const bestUci = await getBotMove(game.fen, 10);
 
     // Convert UCI to SAN using chess.js
     const chess = new Chess(game.fen);
