@@ -317,8 +317,8 @@ export default function GamePage() {
             />
           )}
 
-          {/* Move History */}
-          <MoveHistory moves={moves} />
+          {/* Move History — hidden in study mode (StudyPanel has its own) */}
+          {gameMode !== 'study' && <MoveHistory moves={moves} />}
         </div>
       </div>
     </div>
