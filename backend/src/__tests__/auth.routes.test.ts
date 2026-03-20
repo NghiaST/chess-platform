@@ -6,6 +6,15 @@
  * so no real DB is needed.
  */
 
+import {
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  jest,
+} from '@jest/globals';
+
 jest.mock('../config/database', () => ({ __esModule: true, default: {} }));
 jest.mock('../services/auth.service');
 // Bypass rate limiting in tests so repeated calls don't produce 429
